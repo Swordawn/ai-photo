@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VO-ED WEEK '26 - 选择你的专属风格</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&amp;family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e3e2e4",
+                        "tertiary-container": "#b5b0b9",
+                        "surface-container-highest": "#343537",
+                        "on-secondary": "#322f38",
+                        "surface-container-high": "#292a2c",
+                        "surface-container-lowest": "#0d0e10",
+                        "secondary-fixed": "#e7e0ec",
+                        "secondary": "#cac4d0",
+                        "on-primary-fixed-variant": "#4b398b",
+                        "inverse-surface": "#e3e2e4",
+                        "on-error": "#690005",
+                        "secondary-fixed-dim": "#cac4d0",
+                        "surface-container-low": "#1a1c1d",
+                        "inverse-on-surface": "#2f3032",
+                        "surface": "#121315",
+                        "primary-fixed-dim": "#ccbeff",
+                        "on-tertiary-fixed-variant": "#49454d",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary": "#322f36",
+                        "on-tertiary-container": "#46434a",
+                        "tertiary": "#d1cbd4",
+                        "on-secondary-container": "#b9b3bf",
+                        "error-container": "#93000a",
+                        "surface-bright": "#38393b",
+                        "tertiary-fixed": "#e7e0e9",
+                        "on-tertiary-fixed": "#1d1a21",
+                        "primary": "#d3c5ff",
+                        "surface-tint": "#ccbeff",
+                        "primary-fixed": "#e7deff",
+                        "on-primary-fixed": "#1f025e",
+                        "secondary-container": "#49454f",
+                        "on-surface-variant": "#cac4d2",
+                        "on-secondary-fixed": "#1d1a23",
+                        "on-primary": "#342073",
+                        "outline-variant": "#484551",
+                        "outline": "#938f9c",
+                        "tertiary-fixed-dim": "#cac4cd",
+                        "surface-variant": "#343537",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#121315",
+                        "on-secondary-fixed-variant": "#49454f",
+                        "surface-container": "#1e2021",
+                        "inverse-primary": "#6351a4",
+                        "on-surface": "#e3e2e4",
+                        "background": "#121315",
+                        "on-primary-container": "#483688",
+                        "primary-container": "#b8a5ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "gutter": "16px",
+                        "margin-desktop": "40px",
+                        "margin-mobile": "20px",
+                        "touch-target-min": "44px"
+                    },
+                    "fontFamily": {
+                        "h1": ["Space Grotesk"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "h2": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "h1": ["40px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["13px", { "lineHeight": "1", "letterSpacing": "0.04em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "h2": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-stroke {
+            box-shadow: inset 1px 1px 0px 0px rgba(255,255,255,0.1);
+        }
+        .bg-mesh {
+            background: radial-gradient(circle at 10% 20%, rgba(184, 165, 255, 0.15) 0%, transparent 40%),
+                        radial-gradient(circle at 90% 80%, rgba(184, 165, 255, 0.1) 0%, transparent 50%),
+                        #121315;
+        }
+    </style>
+</head>
+<body class="bg-mesh text-on-surface min-h-screen flex flex-col font-body-md overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10 shadow-sm flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 w-full fixed top-0 z-50">
+<div class="font-h1 text-h1 tracking-tight text-primary">VO-ED WEEK '26</div>
+<!-- Progress Indicator -->
+<div class="hidden lg:flex items-center gap-3 bg-surface-container-high/40 px-5 py-2 rounded-full border border-outline-variant/20 glass-stroke">
+<div class="flex items-center gap-1.5 text-on-surface-variant opacity-60">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome_motion">auto_awesome_motion</span>
+<span class="font-label-sm text-label-sm">欢迎</span>
+</div>
+<div class="w-6 h-[1px] bg-outline-variant/40"></div>
+<div class="flex items-center gap-1.5 text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="palette">palette</span>
+<span class="font-label-sm text-label-sm">选择风格</span>
+</div>
+<div class="w-6 h-[1px] bg-outline-variant/40"></div>
+<div class="flex items-center gap-1.5 text-on-surface-variant opacity-60">
+<span class="material-symbols-outlined text-[18px]" data-icon="photo_camera">photo_camera</span>
+<span class="font-label-sm text-label-sm">拍照</span>
+</div>
+<div class="w-6 h-[1px] bg-outline-variant/40"></div>
+<div class="flex items-center gap-1.5 text-on-surface-variant opacity-60">
+<span class="material-symbols-outlined text-[18px]" data-icon="hourglass_empty">hourglass_empty</span>
+<span class="font-label-sm text-label-sm">生成中</span>
+</div>
+<div class="w-6 h-[1px] bg-outline-variant/40"></div>
+<div class="flex items-center gap-1.5 text-on-surface-variant opacity-60">
+<span class="material-symbols-outlined text-[18px]" data-icon="qr_code_2">qr_code_2</span>
+<span class="font-label-sm text-label-sm">下载</span>
+</div>
+</div>
+<div class="flex gap-4 items-center">
+<button class="text-primary hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center w-[touch-target-min] h-[touch-target-min]">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+<button class="text-primary hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center w-[touch-target-min] h-[touch-target-min]">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-grow pt-[100px] pb-[100px] flex flex-col w-full relative z-10 px-margin-mobile md:px-margin-desktop">
+<!-- Header Section -->
+<section class="mb-gutter md:mb-margin-desktop text-center md:text-left pt-8 max-w-7xl mx-auto w-full">
+<h1 class="font-h1 text-h1 text-on-surface mb-4">选择你的专属风格</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">选择一款 AI 风格来转换你的肖像。我们的神经引擎将在保持您面貌特征的同时，将您的面部特征融入所选的艺术风格中。</p>
+</section>
+<!-- Bento Grid for Styles -->
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter lg:gap-6 mb-margin-desktop flex-grow max-w-7xl mx-auto w-full">
+<!-- Card 1: Campus Scholar -->
+<button class="group relative overflow-hidden rounded-xl bg-surface-container-high/40 glass-stroke aspect-[3/4] flex flex-col justify-end text-left transition-transform active:scale-[0.98]">
+<img alt="学霸风" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="A portrait of a student holding books on a vibrant university campus, featuring a warm, sophisticated color palette with soft purple and slate tones. The image is rendered in a highly polished, glassmorphic aesthetic with deep atmospheric layering. Lighting is cinematic, smooth, and evokes a premium, visionary AI photo booth experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkw-5jUFCDR2FT5tY0Iw6Zw6UMa3zqRgsWB-Avb7iULOwVHRLAkQsifZBen24EjmWx6DJ3EY9kr4MJnTUL41TG3DztlcHwy9iBAK2nsXSYFEx2RiAjScOHtbXWK4a1lhpAFGWm6zgOSq88Yd05J40IUme4cDeSBTh9GbqgEQfeczSRGPGqeHVwMBPr_4tjuMXvbtnVJlXJvmZQk8AInSZUGySH4cJslmZ5JwRmQFjfV_RX0Ftmx-6-Udx1jLVTGs3f2A0Gm0KPHwA"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-lowest via-surface/40 to-transparent"></div>
+<div class="relative p-6 z-10 w-full">
+<div class="bg-surface/60 backdrop-blur-xl rounded-lg p-4 glass-stroke border border-outline-variant/20 inline-block w-full shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<h3 class="font-h2 text-body-lg font-medium text-on-surface mb-1">学霸风</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-normal">Campus Scholar</p>
+</div>
+</div>
+<!-- Selection Indicator (Hidden by default) -->
+<div class="absolute top-4 right-4 bg-primary-container text-on-primary-container rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</button>
+<!-- Card 2: Cyber Punk (Selected State Example) -->
+<button class="group relative overflow-hidden rounded-xl bg-surface-container-high/40 glass-stroke aspect-[3/4] flex flex-col justify-end text-left transition-transform active:scale-[0.98] ring-2 ring-primary ring-offset-2 ring-offset-surface">
+<img alt="AI赛博风" class="absolute inset-0 w-full h-full object-cover opacity-90 scale-105 transition-transform duration-700 ease-out" data-alt="A neon-lit cyberpunk portrait of a person in a futuristic city setting, incorporating subtle soft purple glows and deep slate shadows. The visual style is highly polished, cinematic, and atmospheric, leaning into a premium, glassmorphic aesthetic rather than gritty realism. Lighting is vibrant yet smooth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCd-Sdz0LBCJhlSU5JRjPRHc0wlL0x4pohSLlAG_ByAm0WJ8O6mtl59JzKMfC2cia34e89KtBpS5kbC4AV0dkHUen0O9GQHZg2yrLW_bmpJR_jLJgw48W51cCncvbCBmSqIwtNgD1UvRr6saiRqDGU9a5w3RCPCY-KWoY1voDiD6NkBqYbTH2Od1QdtMetMZf2M-k0D_tBwaa2m0vhPZD0MytcR74y9U4dbUy3QaYzhgSwAFnZSkEczjw4C9CgkiX6_UTFW-tkSRPg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-lowest via-surface/50 to-transparent"></div>
+<div class="relative p-6 z-10 w-full">
+<div class="bg-primary/20 backdrop-blur-xl rounded-lg p-4 glass-stroke border border-primary/30 inline-block w-full shadow-[0_0_20px_rgba(184,165,255,0.2)]">
+<h3 class="font-h2 text-body-lg font-medium text-primary-fixed mb-1">AI赛博风</h3>
+<p class="font-label-sm text-label-sm text-primary-fixed-dim font-normal">Cyber Punk</p>
+</div>
+</div>
+<!-- Selection Indicator (Visible) -->
+<div class="absolute top-4 right-4 bg-primary text-on-primary rounded-full p-1 shadow-[0_0_15px_rgba(184,165,255,0.5)]">
+<span class="material-symbols-outlined" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</button>
+<!-- Card 3: Chinese Heritage -->
+<button class="group relative overflow-hidden rounded-xl bg-surface-container-high/40 glass-stroke aspect-[3/4] flex flex-col justify-end text-left transition-transform active:scale-[0.98]">
+<img alt="国潮古风" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="A portrait featuring traditional Chinese architectural elements and attire, rendered in a modern, sophisticated visual style. The color palette integrates muted slate and soft purple accents to fit a premium AI photo booth experience. The image relies on deep atmospheric layering and smooth, cinematic lighting for a visionary look." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCOdCSUuMaNh5PdXEW68cvkjM_jj_zpdiFHYO27MsNF9izRq1eZf6UXmEF96AVBz-dweC1NLz5jaIMXBtGidlUEMRgZx9ddzpdCYcKnQNPLKAzCSbjuayYn5BbKGO0CugHHTgtTE4usislom2PFnF4f8uVREXU7RvvCC7TGNXLdtwdSMQ9CSWijTaynDlLcG7P3jJJy44FXbFPVZq9mIU4T23ciXggJfyoOExvAXeP4cRqOL5gbsdIupi_5YPUD_9sISWM5dgc9zww"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-lowest via-surface/40 to-transparent"></div>
+<div class="relative p-6 z-10 w-full">
+<div class="bg-surface/60 backdrop-blur-xl rounded-lg p-4 glass-stroke border border-outline-variant/20 inline-block w-full shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<h3 class="font-h2 text-body-lg font-medium text-on-surface mb-1">国潮古风</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-normal">Chinese Heritage</p>
+</div>
+</div>
+<!-- Selection Indicator (Hidden by default) -->
+<div class="absolute top-4 right-4 bg-primary-container text-on-primary-container rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</button>
+<!-- Card 4: Space Explorer -->
+<button class="group relative overflow-hidden rounded-xl bg-surface-container-high/40 glass-stroke aspect-[3/4] flex flex-col justify-end text-left transition-transform active:scale-[0.98]">
+<img alt="未来宇航员" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="A futuristic portrait of an astronaut looking at the stars, designed with a sleek, minimalist glassmorphic aesthetic. The scene uses soft, fluid gradients of purple and deep space black, emphasizing atmospheric layering over harsh contrasts. The lighting is polished and expensive, resembling a high-end physical camera lens." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDTQfOUWRbVXW4yIbW0Cu88xFqdbrq2J_Qw7gioiBjqbJ7ISW7EV9MeyolQMMfGpZqZYHSNzWQRWXTp1opvInAKmqYApiixnjgUE13FMB_YnlPJ1bbMnXwrfnilkQ3dRaOrsyiOk5cejwR_q9SX_K4ZO7L_eo0Vkdym4GeXIi2YxNn9M_g2PZFar0sn9evMQSrVMLQrn_94ztEuoCH41zqCiGLnaArkX1GHuAulsL3dsxDA_Zf5Yuc0UhiZjcqHaJph_PaiAxITUw"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-lowest via-surface/40 to-transparent"></div>
+<div class="relative p-6 z-10 w-full">
+<div class="bg-surface/60 backdrop-blur-xl rounded-lg p-4 glass-stroke border border-outline-variant/20 inline-block w-full shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<h3 class="font-h2 text-body-lg font-medium text-on-surface mb-1">未来宇航员</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-normal">Space Explorer</p>
+</div>
+</div>
+<!-- Selection Indicator (Hidden by default) -->
+<div class="absolute top-4 right-4 bg-primary-container text-on-primary-container rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</button>
+<!-- Card 5: Code Master -->
+<button class="group relative overflow-hidden rounded-xl bg-surface-container-high/40 glass-stroke aspect-[3/4] flex flex-col justify-end text-left transition-transform active:scale-[0.98]">
+<img alt="极客程序员" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="A high-tech portrait representing a coding expert, moving away from typical 'hacker' tropes towards a clean, sophisticated, visionary look. The image features a minimalist background with subtle geometric glowing shapes in soft purple and white. The aesthetic is smooth, cinematic, and layered with translucent glass effects." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD14zo71bJwk7gKKOW9g6paSLOZxIlgUdaHwAm8ysvN9JD-dh2zOYXagIYo00tQg_xVHZetFCfiXiOtXagSCt4QQq_ICQ-HXmnLzpaVidrRX2ukK7TqRgiWse3MxtCpxgCC_EtXcdUOWAjIf2amP46bNjBsNnDZZn74WZtMrrnPCT7adAi92gTSi3BA1oQhemymlZdwwEdHtj0EX7xvtKn3IUnrFOkJoa9S_kTBG9bfCC6GLcLm5A-hcQ8ua-aDPeLkvXjF2EL7yuE"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-lowest via-surface/40 to-transparent"></div>
+<div class="relative p-6 z-10 w-full">
+<div class="bg-surface/60 backdrop-blur-xl rounded-lg p-4 glass-stroke border border-outline-variant/20 inline-block w-full shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<h3 class="font-h2 text-body-lg font-medium text-on-surface mb-1">极客程序员</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-normal">Code Master</p>
+</div>
+</div>
+<!-- Selection Indicator (Hidden by default) -->
+<div class="absolute top-4 right-4 bg-primary-container text-on-primary-container rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</button>
+<!-- Card 6: Graduation -->
+<button class="group relative overflow-hidden rounded-xl bg-surface-container-high/40 glass-stroke aspect-[3/4] flex flex-col justify-end text-left transition-transform active:scale-[0.98]">
+<img alt="毕业纪念风" class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="A portrait of a graduate throwing a cap into the air, reimagined in a premium, minimalist AI art style. The scene uses a deep atmospheric layering technique with muted slate backgrounds and subtle soft purple glows. The lighting is cinematic and smooth, evoking a highly polished, visionary celebration." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBo3vQSrl1vcSMavZ4D1zVMGGCVQQXAZV10-18awftWXaipLfgKeOIPMcpJmRyHG-H90u5xYmDW57Rm-UP7j32QcauakIpx21ZjHRgkT4g2XTppL1CbYy4UAFZRxLIXsl6kKdEWofuFlpL_PHTjCu1vhpsOVn6RUnOqJPG3xiDYxhDh6xk56KQ587MsXJCllBfMQXtzb83c6rlmlOIJdltqCS63fhLkjAxVQaj7Tlo6OpqnM306ut5wz8d5_mN0CgCymJ5H4FFeVA4"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-lowest via-surface/40 to-transparent"></div>
+<div class="relative p-6 z-10 w-full">
+<div class="bg-surface/60 backdrop-blur-xl rounded-lg p-4 glass-stroke border border-outline-variant/20 inline-block w-full shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+<h3 class="font-h2 text-body-lg font-medium text-on-surface mb-1">毕业纪念风</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant font-normal">Graduation</p>
+</div>
+</div>
+<!-- Selection Indicator (Hidden by default) -->
+<div class="absolute top-4 right-4 bg-primary-container text-on-primary-container rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</button>
+</section>
+<!-- Bottom Navigation / Actions -->
+<section class="flex justify-between items-center mt-auto pt-6 border-t border-outline-variant/10 max-w-7xl mx-auto w-full">
+<button class="flex items-center justify-center gap-2 px-6 py-3 min-h-[touch-target-min] rounded-xl bg-surface-container-highest/50 backdrop-blur-md glass-stroke text-on-surface hover:bg-surface-container-highest transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+<span class="font-label-sm text-label-sm">返回</span>
+</button>
+<button class="flex items-center justify-center gap-2 px-8 py-3 min-h-[touch-target-min] rounded-xl bg-primary text-on-primary font-bold shadow-[0_0_20px_rgba(184,165,255,0.4)] hover:opacity-90 transition-opacity active:scale-[0.98] relative overflow-hidden group">
+<div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+<span class="font-label-sm text-label-sm relative z-10">下一步</span>
+<span class="material-symbols-outlined relative z-10" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-6 px-margin-desktop flex justify-between items-center bg-surface bg-surface-container-lowest docked full-width bottom-0 bg-gradient-to-t from-surface-container-low to-transparent flat no shadows relative z-20">
+<div class="font-label-sm text-label-sm text-outline">© 2026 职业教育卓越</div>
+<div class="flex gap-4">
+<a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">隐私政策</a>
+<a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">支持</a>
+<a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">活动信息</a>
+</div>
+</footer>
+</body></html>

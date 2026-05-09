@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI 智能写真 - 欢迎</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e3e2e4",
+                        "tertiary-container": "#b5b0b9",
+                        "surface-container-highest": "#343537",
+                        "on-secondary": "#322f38",
+                        "surface-container-high": "#292a2c",
+                        "surface-container-lowest": "#0d0e10",
+                        "secondary-fixed": "#e7e0ec",
+                        "secondary": "#cac4d0",
+                        "on-primary-fixed-variant": "#4b398b",
+                        "inverse-surface": "#e3e2e4",
+                        "on-error": "#690005",
+                        "secondary-fixed-dim": "#cac4d0",
+                        "surface-container-low": "#1a1c1d",
+                        "inverse-on-surface": "#2f3032",
+                        "surface": "#121315",
+                        "primary-fixed-dim": "#ccbeff",
+                        "on-tertiary-fixed-variant": "#49454d",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary": "#322f36",
+                        "on-tertiary-container": "#46434a",
+                        "tertiary": "#d1cbd4",
+                        "on-secondary-container": "#b9b3bf",
+                        "error-container": "#93000a",
+                        "surface-bright": "#38393b",
+                        "tertiary-fixed": "#e7e0e9",
+                        "on-tertiary-fixed": "#1d1a21",
+                        "primary": "#d3c5ff",
+                        "surface-tint": "#ccbeff",
+                        "primary-fixed": "#e7deff",
+                        "on-primary-fixed": "#1f025e",
+                        "secondary-container": "#49454f",
+                        "on-surface-variant": "#cac4d2",
+                        "on-secondary-fixed": "#1d1a23",
+                        "on-primary": "#342073",
+                        "outline-variant": "#484551",
+                        "outline": "#938f9c",
+                        "tertiary-fixed-dim": "#cac4cd",
+                        "surface-variant": "#343537",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#121315",
+                        "on-secondary-fixed-variant": "#49454f",
+                        "surface-container": "#1e2021",
+                        "inverse-primary": "#6351a4",
+                        "on-surface": "#e3e2e4",
+                        "background": "#121315",
+                        "on-primary-container": "#483688",
+                        "primary-container": "#b8a5ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "gutter": "16px",
+                        "margin-desktop": "40px",
+                        "margin-mobile": "20px",
+                        "touch-target-min": "44px"
+                    },
+                    "fontFamily": {
+                        "h1": ["Space Grotesk", "sans-serif"],
+                        "label-sm": ["Inter", "sans-serif"],
+                        "body-md": ["Inter", "sans-serif"],
+                        "body-lg": ["Inter", "sans-serif"],
+                        "h2": ["Space Grotesk", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "h1": ["40px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["13px", { "lineHeight": "1", "letterSpacing": "0.04em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "h2": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 w-full fixed top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10 shadow-sm">
+<div class="flex items-center gap-4">
+<h1 class="font-h1 text-h1 tracking-tight text-primary">人工智能学院 · 职教周技能展演 2026</h1>
+</div>
+<div class="flex items-center gap-2">
+<button aria-label="account_circle" class="p-2 text-primary hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center min-w-[44px] min-h-[44px]">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+<button aria-label="help" class="p-2 text-primary hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center min-w-[44px] min-h-[44px]">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-grow flex flex-col w-full pt-[72px] relative overflow-x-hidden min-h-screen">
+<!-- Fluid Gradient Background Elements -->
+<div class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+<div class="absolute top-1/4 left-1/4 w-[800px] h-[800px] bg-primary/10 rounded-full blur-[120px] mix-blend-screen transform -translate-x-1/2 -translate-y-1/2"></div>
+<div class="absolute bottom-0 right-0 w-[600px] h-[600px] bg-[#4b398b]/20 rounded-full blur-[100px] mix-blend-screen transform translate-x-1/4 translate-y-1/4"></div>
+<div class="absolute top-1/2 left-1/2 w-full h-full bg-[radial-gradient(ellipse_at_center,_transparent_0%,_#121315_80%)] transform -translate-x-1/2 -translate-y-1/2"></div>
+</div>
+<!-- Step Indicator -->
+<div class="w-full flex justify-center py-8 z-20 relative px-4">
+<div class="hidden md:flex items-center gap-4 bg-surface-container-high/50 backdrop-blur-xl border border-white/10 rounded-full px-8 py-3 shadow-lg">
+<!-- Step 1 (Active) -->
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined text-[20px]" data-weight="fill" style="font-variation-settings: 'FILL' 1;">auto_awesome_motion</span>
+<span class="font-label-sm text-label-sm font-bold">欢迎</span>
+</div>
+<div class="w-8 h-[1px] bg-outline-variant"></div>
+<!-- Step 2 -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">palette</span>
+<span class="font-label-sm text-label-sm">选择风格</span>
+</div>
+<div class="w-8 h-[1px] bg-outline-variant"></div>
+<!-- Step 3 -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">photo_camera</span>
+<span class="font-label-sm text-label-sm">拍照</span>
+</div>
+<div class="w-8 h-[1px] bg-outline-variant"></div>
+<!-- Step 4 -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">hourglass_empty</span>
+<span class="font-label-sm text-label-sm">生成中</span>
+</div>
+<div class="w-8 h-[1px] bg-outline-variant"></div>
+<!-- Step 5 -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">qr_code_2</span>
+<span class="font-label-sm text-label-sm">下载</span>
+</div>
+</div>
+</div>
+<!-- Content Area -->
+<div class="flex-grow flex flex-col items-center justify-center p-margin-mobile md:p-margin-desktop z-10 relative">
+<!-- Branding Tag -->
+<div class="mb-12 flex items-center gap-3 bg-surface-container-high/50 backdrop-blur-md border border-white/5 rounded-full px-6 py-2 shadow-lg">
+<span class="material-symbols-outlined text-primary text-[20px]">school</span>
+<span class="font-label-sm text-label-sm text-on-surface tracking-widest uppercase">人工智能学院</span>
+</div>
+<!-- Central Action -->
+<button class="group relative flex items-center justify-center min-w-[touch-target-min] mb-16 outline-none">
+<!-- Outer Glow -->
+<div class="absolute inset-0 bg-primary-container rounded-full blur-2xl opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
+<!-- Glassmorphism Button Surface -->
+<div class="relative flex items-center gap-6 px-16 py-10 rounded-full bg-surface-container-highest/40 backdrop-blur-3xl border border-white/10 group-hover:border-primary/30 group-active:scale-[0.98] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden">
+<!-- Top Rim Highlight -->
+<div class="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+<span class="material-symbols-outlined text-[48px] text-primary group-hover:text-primary-fixed transition-colors" data-icon="touch_app">touch_app</span>
+<span class="font-h1 text-h1 text-on-surface group-hover:text-white transition-colors tracking-tight">触摸开始</span>
+</div>
+</button>
+<!-- Service Count -->
+<div class="flex flex-col items-center gap-2">
+<div class="flex items-center justify-center gap-[-8px]">
+<!-- Abstract avatars using CSS gradients to represent users without images -->
+<div class="w-8 h-8 rounded-full border-2 border-background bg-gradient-to-br from-primary to-on-primary-container shadow-sm z-30"></div>
+<div class="w-8 h-8 rounded-full border-2 border-background bg-gradient-to-br from-tertiary to-surface-variant shadow-sm z-20 -ml-3"></div>
+<div class="w-8 h-8 rounded-full border-2 border-background bg-gradient-to-br from-secondary to-outline shadow-sm z-10 -ml-3"></div>
+</div>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-2 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(211,197,255,0.8)]"></span>
+                    已累计服务 1,284 人次
+                </p>
+</div>
+</div>
+<!-- Footer -->
+<footer class="w-full py-6 px-margin-mobile md:px-margin-desktop flex flex-col md:flex-row justify-between items-center bg-surface-container-lowest bg-gradient-to-t from-surface-container-low to-transparent z-10 mt-auto">
+<p class="font-label-sm text-label-sm text-outline mb-4 md:mb-0">© 2026 职业教育卓越</p>
+<ul class="flex items-center gap-8">
+<li><a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">隐私政策</a></li>
+<li><a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">支持</a></li>
+<li><a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">活动信息</a></li>
+</ul>
+</footer>
+</main>
+</body></html>

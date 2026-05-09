@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>生成成功！ - AI 照相馆</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config from Style Guidance -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-background": "#e3e2e4",
+                    "tertiary-container": "#b5b0b9",
+                    "surface-container-highest": "#343537",
+                    "on-secondary": "#322f38",
+                    "surface-container-high": "#292a2c",
+                    "surface-container-lowest": "#0d0e10",
+                    "secondary-fixed": "#e7e0ec",
+                    "secondary": "#cac4d0",
+                    "on-primary-fixed-variant": "#4b398b",
+                    "inverse-surface": "#e3e2e4",
+                    "on-error": "#690005",
+                    "secondary-fixed-dim": "#cac4d0",
+                    "surface-container-low": "#1a1c1d",
+                    "inverse-on-surface": "#2f3032",
+                    "surface": "#121315",
+                    "primary-fixed-dim": "#ccbeff",
+                    "on-tertiary-fixed-variant": "#49454d",
+                    "on-error-container": "#ffdad6",
+                    "on-tertiary": "#322f36",
+                    "on-tertiary-container": "#46434a",
+                    "tertiary": "#d1cbd4",
+                    "on-secondary-container": "#b9b3bf",
+                    "error-container": "#93000a",
+                    "surface-bright": "#38393b",
+                    "tertiary-fixed": "#e7e0e9",
+                    "on-tertiary-fixed": "#1d1a21",
+                    "primary": "#d3c5ff",
+                    "surface-tint": "#ccbeff",
+                    "primary-fixed": "#e7deff",
+                    "on-primary-fixed": "#1f025e",
+                    "secondary-container": "#49454f",
+                    "on-surface-variant": "#cac4d2",
+                    "on-secondary-fixed": "#1d1a23",
+                    "on-primary": "#342073",
+                    "outline-variant": "#484551",
+                    "outline": "#938f9c",
+                    "tertiary-fixed-dim": "#cac4cd",
+                    "surface-variant": "#343537",
+                    "error": "#ffb4ab",
+                    "surface-dim": "#121315",
+                    "on-secondary-fixed-variant": "#49454f",
+                    "surface-container": "#1e2021",
+                    "inverse-primary": "#6351a4",
+                    "on-surface": "#e3e2e4",
+                    "background": "#121315",
+                    "on-primary-container": "#483688",
+                    "primary-container": "#b8a5ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "8px",
+                    "gutter": "16px",
+                    "margin-desktop": "40px",
+                    "margin-mobile": "20px",
+                    "touch-target-min": "44px"
+            },
+            "fontFamily": {
+                    "h1": ["Space Grotesk"],
+                    "label-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "h2": ["Space Grotesk"]
+            },
+            "fontSize": {
+                    "h1": ["40px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "label-sm": ["13px", {"lineHeight": "1", "letterSpacing": "0.04em", "fontWeight": "600"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "h2": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "500"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Base styles to support design system components */
+        body {
+            background-color: #121315; /* Base Layer */
+            background-image: radial-gradient(circle at 50% -20%, rgba(184, 165, 255, 0.15) 0%, transparent 60%); /* Ethereal glow */
+            background-attachment: fixed;
+        }
+        
+        .glass-panel {
+            background: rgba(42, 39, 48, 0.4); /* Muted Slate base with opacity */
+            backdrop-filter: blur(32px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .glass-button {
+            background: rgba(52, 53, 55, 0.5); /* surface-container-highest */
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="text-on-background font-body-md h-screen w-screen overflow-hidden flex selection:bg-primary-container selection:text-on-primary-container">
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full h-full overflow-y-auto relative flex flex-col items-center pt-8 md:pt-12 pb-margin-desktop px-margin-mobile md:px-margin-desktop">
+<!-- Progress Indicator -->
+<div class="w-full max-w-4xl flex items-center justify-center mb-10 overflow-x-auto pb-2">
+<div class="flex items-center space-x-2 md:space-x-4 min-w-max">
+<div class="flex items-center text-on-surface-variant opacity-50">
+<span class="material-symbols-outlined text-sm mr-1">auto_awesome_motion</span> <span class="text-xs md:text-sm font-label-sm">欢迎</span>
+</div>
+<div class="h-px w-4 md:w-8 bg-on-surface-variant opacity-20"></div>
+<div class="flex items-center text-on-surface-variant opacity-50">
+<span class="material-symbols-outlined text-sm mr-1">palette</span> <span class="text-xs md:text-sm font-label-sm">选择风格</span>
+</div>
+<div class="h-px w-4 md:w-8 bg-on-surface-variant opacity-20"></div>
+<div class="flex items-center text-on-surface-variant opacity-50">
+<span class="material-symbols-outlined text-sm mr-1">photo_camera</span> <span class="text-xs md:text-sm font-label-sm">拍摄</span>
+</div>
+<div class="h-px w-4 md:w-8 bg-on-surface-variant opacity-20"></div>
+<div class="flex items-center text-on-surface-variant opacity-50">
+<span class="material-symbols-outlined text-sm mr-1">hourglass_empty</span> <span class="text-xs md:text-sm font-label-sm">生成中</span>
+</div>
+<div class="h-px w-4 md:w-8 bg-primary opacity-50"></div>
+<div class="flex items-center text-primary bg-primary-container/20 px-4 py-2 rounded-full border border-primary/30 shadow-[0_0_15px_rgba(184,165,255,0.2)]">
+<span class="material-symbols-outlined text-sm mr-1.5" data-weight="fill" style="font-variation-settings: 'FILL' 1;">qr_code_2</span> <span class="text-xs md:text-sm font-label-sm font-bold">下载</span>
+</div>
+</div>
+</div>
+<!-- Header -->
+<header class="w-full max-w-5xl text-center mb-10">
+<h1 class="font-h1 text-h1 text-primary mb-4">生成成功！</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">您的 AI 定制写真已完成，请使用手机扫描下方二维码保存高清大图。</p>
+</header>
+<!-- Main Bento Grid -->
+<div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-gutter flex-1 items-start">
+<!-- Left Column: Image Comparison -->
+<div class="lg:col-span-8 glass-panel rounded-xl p-6 flex flex-col h-full min-h-[600px]">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">auto_awesome</span>
+<h3 class="font-h2 text-h2 text-on-surface text-xl">结果</h3>
+</div>
+</div>
+<div class="flex-1 relative rounded-xl overflow-hidden border border-primary/30 shadow-[0_0_40px_rgba(184,165,255,0.15)] bg-surface-container-lowest flex items-center justify-center">
+<!-- AI Result Image (C-位) -->
+<img alt="AI Generated Result" class="absolute inset-0 w-full h-full object-cover" data-alt="A stunning, ethereal digital portrait of the same subject transformed into a futuristic, glowing aesthetic. The subject is softly illuminated by radiant, bioluminescent light sources in deep purples and electric blues, matching the Ethereal Lens UI style. The background dissolves into a sleek, glassmorphic abstraction with subtle bokeh effects and flowing gradient meshes. The image feels cinematic, premium, and highly stylized, blending photorealism with visionary digital art." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbXfO7qGwhp7JBSlTdjHH9P2m5UIbIiFzyxTK9hyD_m4KQWtDzqxnSqO_jBFJ_4P6Iwr650qOJ-4sY9cZkKCTcaVQtmdKZjYD_bPga8er9R2rc0BmhcnbZHczGCquXa3Swu7Dx3Cjf3gHEQePngXLvKF0OPCisDD7zJCPTEW96IkqlIM_5KBoLmQCNaFU2BiS76Mw4qockMKZ3fixmgfA0z1QoXVuEmpN0nRc0w4XXWHOCgJiGPCFyGH1NKjd3CD96AZPzxkQ38GI"/>
+<div class="absolute bottom-6 left-6 bg-primary-container/90 backdrop-blur-md px-4 py-2 rounded-lg font-label-sm text-label-sm text-on-primary-container shadow-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+                            AI 生成结果
+                        </div>
+<!-- Original Image (Floating Secondary Card) -->
+<div class="absolute top-6 right-6 w-32 md:w-48 aspect-[3/4] rounded-lg overflow-hidden border-2 border-white/10 shadow-2xl bg-surface">
+<img alt="Original photo" class="w-full h-full object-cover opacity-90" data-alt="A high-quality, evenly lit portrait photograph of a young professional in a modern, neutral-toned studio setting. The lighting is soft and natural, emphasizing clear facial features without dramatic shadows. The background is a simple, muted grey to keep focus on the subject. The overall aesthetic is clean, realistic, and highly detailed, capturing a candid, approachable expression." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaA7OYFBuf-IK8T-km9TzaMWsMUnhl7wOwGHO__vRYiv99X85dYcWMmgbse6X8zvuHCM-5C8LnqGTmyurJoPUysf1tZdh5bRe68wfOZ96-esnavpYU5tknBD8LzH2GgD4zqgg3QgaTH01-Vmm9Nz95_VF8gVjJEshFvSUwmmwdNgWa5KhWoiuYOP_xA3iq1pGQQixUlRiTgKZjEnxBBnmQdkUD88Zlh2ugm8w4T3JLJs6LO0O254rTqVpNHmbx6cwTxOUG7XodEaM"/>
+<div class="absolute bottom-2 left-2 right-2 bg-surface/80 backdrop-blur-md px-2 py-1.5 rounded text-center font-label-sm text-[11px] text-on-surface shadow-sm">您的原图</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Actions & QR -->
+<div class="lg:col-span-4 flex flex-col gap-gutter h-full">
+<!-- QR Code Card -->
+<div class="glass-panel rounded-xl p-8 flex flex-col items-center justify-center flex-1 text-center relative overflow-hidden">
+<!-- Subtle background glow behind QR -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-primary/20 rounded-full blur-[50px] pointer-events-none"></div>
+<h3 class="font-h2 text-h2 text-on-surface text-2xl mb-2 relative z-10">扫码下载</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8 relative z-10">直接在您的设备上获取高清图片。</p>
+<div class="bg-white p-4 rounded-xl shadow-lg mb-8 relative z-10 w-48 h-48 flex items-center justify-center">
+<img alt="QR Code" class="w-full h-full" data-alt="A crisp, high-contrast QR code graphic embedded within a sleek, white rounded container. The QR pattern is sharp black against a pristine white background for maximum scannability. The design is simple, functional, and clean, meant to contrast heavily against the dark, moody interface of the surrounding Ethereal Lens UI theme to ensure rapid camera detection." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCN_UmP0rR7PEsxwz1B5vyKYWGM0AjKTO1wxxTDLYBSxNlime1tPvcTwW6xDU8KnAFVuqiipQ_kKQqJypIjeeXmfkLAi8m-9WqzFehUvPVWejAse1McDIOUlbEF8EfEK4QmmhL1oUVHXV9QbkdoVWpG4DwCK3NktqCJITx2PtLRlu6I7MDM3BHR0LZ510Wn5mRxJ_Qmvaa6yu9RiHbPwC7DKuJahEJW7K-zu4DRs2iISxA_kNkWyCRiEJaWRxs5bl9qp755KtrhYhI"/>
+</div>
+<!-- Countdown -->
+<div class="flex items-center gap-2 text-primary font-body-md text-body-md relative z-10 bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
+<span class="material-symbols-outlined animate-pulse">timer</span>
+<span>60秒后自动返回首页</span>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="bg-primary-container text-on-primary-container font-label-sm text-label-sm py-5 px-8 rounded-xl shadow-[0_0_20px_rgba(184,165,255,0.2)] hover:opacity-90 active:scale-[0.98] transition-all w-full flex justify-center items-center gap-3 min-h-[touch-target-min]">
+<span class="material-symbols-outlined font-bold text-2xl" data-weight="fill" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="text-lg tracking-wide uppercase">结束体验 (回到首页)</span>
+</button>
+<!-- Secondary Actions Row -->
+<div class="flex gap-4 w-full">
+<button class="glass-button text-on-surface hover:text-primary font-label-sm text-label-sm py-4 px-6 rounded-xl transition-colors flex-1 flex justify-center items-center gap-2 min-h-[touch-target-min] active:scale-[0.98]">
+<span class="material-symbols-outlined">share</span>
+                        分享作品
+                    </button>
+<button class="glass-button text-on-surface hover:text-primary font-label-sm text-label-sm py-4 px-6 rounded-xl transition-colors flex-1 flex justify-center items-center gap-2 min-h-[touch-target-min] active:scale-[0.98]">
+<span class="material-symbols-outlined">refresh</span>
+                        重新生成
+                    </button>
+</div>
+</div>
+</div>
+</main>
+</body></html>

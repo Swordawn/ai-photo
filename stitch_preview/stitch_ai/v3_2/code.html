@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI 拍照亭 - 拍照</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&amp;family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#e3e2e4",
+                        "tertiary-container": "#b5b0b9",
+                        "surface-container-highest": "#343537",
+                        "on-secondary": "#322f38",
+                        "surface-container-high": "#292a2c",
+                        "surface-container-lowest": "#0d0e10",
+                        "secondary-fixed": "#e7e0ec",
+                        "secondary": "#cac4d0",
+                        "on-primary-fixed-variant": "#4b398b",
+                        "inverse-surface": "#e3e2e4",
+                        "on-error": "#690005",
+                        "secondary-fixed-dim": "#cac4d0",
+                        "surface-container-low": "#1a1c1d",
+                        "inverse-on-surface": "#2f3032",
+                        "surface": "#121315",
+                        "primary-fixed-dim": "#ccbeff",
+                        "on-tertiary-fixed-variant": "#49454d",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary": "#322f36",
+                        "on-tertiary-container": "#46434a",
+                        "tertiary": "#d1cbd4",
+                        "on-secondary-container": "#b9b3bf",
+                        "error-container": "#93000a",
+                        "surface-bright": "#38393b",
+                        "tertiary-fixed": "#e7e0e9",
+                        "on-tertiary-fixed": "#1d1a21",
+                        "primary": "#d3c5ff",
+                        "surface-tint": "#ccbeff",
+                        "primary-fixed": "#e7deff",
+                        "on-primary-fixed": "#1f025e",
+                        "secondary-container": "#49454f",
+                        "on-surface-variant": "#cac4d2",
+                        "on-secondary-fixed": "#1d1a23",
+                        "on-primary": "#342073",
+                        "outline-variant": "#484551",
+                        "outline": "#938f9c",
+                        "tertiary-fixed-dim": "#cac4cd",
+                        "surface-variant": "#343537",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#121315",
+                        "on-secondary-fixed-variant": "#49454f",
+                        "surface-container": "#1e2021",
+                        "inverse-primary": "#6351a4",
+                        "on-surface": "#e3e2e4",
+                        "background": "#121315",
+                        "on-primary-container": "#483688",
+                        "primary-container": "#b8a5ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "gutter": "16px",
+                        "margin-desktop": "40px",
+                        "margin-mobile": "20px",
+                        "touch-target-min": "44px"
+                    },
+                    "fontFamily": {
+                        "h1": ["Space Grotesk"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "h2": ["Space Grotesk"]
+                    },
+                    "fontSize": {
+                        "h1": ["40px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["13px", { "lineHeight": "1", "letterSpacing": "0.04em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "h2": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col antialiased selection:bg-primary-container selection:text-on-primary-container overflow-hidden">
+<!-- TopAppBar -->
+<header class="bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10 shadow-sm flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 w-full fixed top-0 z-50">
+<div class="font-h1 text-h1 tracking-tight text-primary">2026 职业教育周</div>
+<div class="flex gap-4">
+<button class="hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center w-touch-target-min h-touch-target-min rounded-full hover:bg-surface-variant/50">
+<span class="material-symbols-outlined text-primary" data-icon="account_circle">account_circle</span>
+</button>
+<button class="hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center w-touch-target-min h-touch-target-min rounded-full hover:bg-surface-variant/50">
+<span class="material-symbols-outlined text-primary" data-icon="help">help</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 pt-24 pb-24 flex flex-col relative h-screen w-full">
+<!-- Ambient Background Gradients -->
+<div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+<div class="absolute top-1/4 left-1/4 w-[50vw] h-[50vw] bg-primary/10 rounded-full blur-[100px] mix-blend-screen"></div>
+<div class="absolute bottom-1/4 right-1/4 w-[40vw] h-[40vw] bg-inverse-primary/10 rounded-full blur-[100px] mix-blend-screen"></div>
+</div>
+<!-- Progress Indicator -->
+<div class="w-full flex justify-center mt-6 relative z-20 px-4">
+<div class="flex items-center gap-2 md:gap-3 bg-surface-container-high/60 backdrop-blur-xl px-4 md:px-6 py-2 md:py-3 rounded-full border border-outline-variant/20 shadow-sm overflow-x-auto no-scrollbar max-w-full">
+<div class="flex items-center gap-1 text-on-surface-variant whitespace-nowrap">
+<span class="font-label-sm text-label-sm">欢迎</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant" data-icon="chevron_right">chevron_right</span>
+<div class="flex items-center gap-1 text-on-surface-variant whitespace-nowrap">
+<span class="font-label-sm text-label-sm">选择风格</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant" data-icon="chevron_right">chevron_right</span>
+<div class="flex items-center gap-1.5 text-on-primary-container bg-primary-container px-3 py-1 rounded-full whitespace-nowrap">
+<span class="font-label-sm text-label-sm font-bold">拍照</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant" data-icon="chevron_right">chevron_right</span>
+<div class="flex items-center gap-1 text-outline whitespace-nowrap">
+<span class="font-label-sm text-label-sm">生成中</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-outline-variant" data-icon="chevron_right">chevron_right</span>
+<div class="flex items-center gap-1 text-outline whitespace-nowrap">
+<span class="font-label-sm text-label-sm">下载</span>
+</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center px-margin-mobile md:px-margin-desktop z-10 relative h-full">
+<!-- Instructions Header -->
+<div class="text-center mb-8 max-w-xl mx-auto">
+<h2 class="font-h2 text-h2 text-on-surface mb-4 tracking-tight drop-shadow-md">请站在摄像头前</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant bg-surface-container-high/40 backdrop-blur-md px-6 py-3 rounded-full border border-white/5 inline-block">
+                    请摘下口罩，正视镜头
+                </p>
+</div>
+<!-- Camera Viewfinder -->
+<div class="relative w-full max-w-2xl aspect-[3/4] md:aspect-video rounded-[32px] overflow-hidden bg-surface-container-low border border-white/10 shadow-2xl backdrop-blur-3xl mx-auto">
+<!-- Live Camera Feed Placeholder -->
+<div class="absolute inset-0 bg-[#2A2730] flex items-center justify-center overflow-hidden">
+<!-- Faux Camera Feed Image -->
+<img alt="Camera Feed" class="w-full h-full object-cover opacity-80 mix-blend-luminosity grayscale-[30%]" data-alt="A cinematic, softly lit portrait of a person looking directly into the camera against a dark, moody background. The image simulates a high-end digital camera feed in a premium dark mode UI. The lighting is subtle and sophisticated, utilizing deep blacks, muted slate grays, and a soft purple ambient glow reflecting the app's minimalist, glassmorphic aesthetic. The mood is calm and professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmKXa7xWzeMdBeTLtd72jvZ3iNCqeRSnM3JOQ4pX7fulnUYZz1xAkteqKCvy2OBge4gtmbjXh_AynnWqdBhp5uMIC6-2qR6YPGkQAaqLXyiY5wko-1EVH3visNQmUzfrpAwIc4bEcApBiolJXtoQq9Y1NvGmek1kQKYFVLM_p1i49Z_culcfk2X053LMla-YXVnDru3pWbXH9_Ii0_0njb69fcTxaiPizVh4cky3YQY8M9L9kD6AOv7PT3PEdqkprlGgPSsOwO6Ws"/>
+<!-- Vignette Overlay -->
+<div class="absolute inset-0 bg-radial-gradient from-transparent to-[#0F0D13]/80"></div>
+</div>
+<!-- Focus Frame UI -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<div class="w-2/3 h-2/3 max-w-sm max-h-sm relative">
+<!-- Corner Brackets -->
+<div class="absolute top-0 left-0 w-12 h-12 border-t-2 border-l-2 border-primary/80 rounded-tl-xl drop-shadow-[0_0_8px_rgba(211,197,255,0.5)]"></div>
+<div class="absolute top-0 right-0 w-12 h-12 border-t-2 border-r-2 border-primary/80 rounded-tr-xl drop-shadow-[0_0_8px_rgba(211,197,255,0.5)]"></div>
+<div class="absolute bottom-0 left-0 w-12 h-12 border-b-2 border-l-2 border-primary/80 rounded-bl-xl drop-shadow-[0_0_8px_rgba(211,197,255,0.5)]"></div>
+<div class="absolute bottom-0 right-0 w-12 h-12 border-b-2 border-r-2 border-primary/80 rounded-br-xl drop-shadow-[0_0_8px_rgba(211,197,255,0.5)]"></div>
+<!-- Face Outline Guide (Subtle) -->
+<div class="absolute inset-8 border border-white/20 rounded-[40%] opacity-50 border-dashed"></div>
+</div>
+</div>
+<!-- Large Countdown Overlay -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none bg-surface/20 backdrop-blur-sm transition-opacity duration-300">
+<span class="font-h1 text-[120px] md:text-[200px] leading-none text-primary drop-shadow-[0_0_30px_rgba(184,165,255,0.8)] font-bold mix-blend-screen">3</span>
+</div>
+<!-- Camera Controls Overlay (Bottom of Viewfinder) -->
+<div class="absolute bottom-0 left-0 right-0 p-6 flex justify-between items-end bg-gradient-to-t from-[#0F0D13]/90 to-transparent">
+<div class="flex items-center gap-2 bg-surface-container-highest/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse shadow-[0_0_8px_rgba(255,180,171,0.8)]"></span>
+<span class="font-label-sm text-label-sm text-on-surface">自动捕获中</span>
+</div>
+<button class="w-12 h-12 rounded-full bg-surface-container-high/80 backdrop-blur-lg border border-white/10 flex items-center justify-center text-on-surface hover:bg-surface-variant transition-colors hover:text-primary">
+<span class="material-symbols-outlined" data-icon="cameraswitch">cameraswitch</span>
+</button>
+</div>
+</div>
+<!-- Bottom Actions -->
+<div class="mt-8 flex justify-center w-full max-w-2xl mx-auto">
+<button class="bg-[#2A2730]/60 backdrop-blur-xl border border-white/10 text-on-surface px-8 py-4 rounded-xl font-label-sm text-label-sm uppercase tracking-wider hover:bg-surface-container-highest transition-all active:scale-95 flex items-center gap-3 min-h-[56px]">
+<span class="material-symbols-outlined" data-icon="refresh">refresh</span>
+                    重新选择
+                </button>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full py-6 px-margin-mobile md:px-margin-desktop flex justify-between items-center bg-surface-container-lowest bg-gradient-to-t from-surface-container-low to-transparent fixed bottom-0 z-30">
+<div class="font-label-sm text-label-sm text-secondary">© 2026 职业教育卓越</div>
+<div class="flex gap-6">
+<a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">隐私政策</a>
+<a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">支持</a>
+<a class="font-label-sm text-label-sm text-outline hover:text-primary transition-colors cursor-pointer" href="#">活动信息</a>
+</div>
+</footer>
+</body></html>

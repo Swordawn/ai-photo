@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>生成专属写真</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-background": "#e3e2e4",
+                      "tertiary-container": "#b5b0b9",
+                      "surface-container-highest": "#343537",
+                      "on-secondary": "#322f38",
+                      "surface-container-high": "#292a2c",
+                      "surface-container-lowest": "#0d0e10",
+                      "secondary-fixed": "#e7e0ec",
+                      "secondary": "#cac4d0",
+                      "on-primary-fixed-variant": "#4b398b",
+                      "inverse-surface": "#e3e2e4",
+                      "on-error": "#690005",
+                      "secondary-fixed-dim": "#cac4d0",
+                      "surface-container-low": "#1a1c1d",
+                      "inverse-on-surface": "#2f3032",
+                      "surface": "#121315",
+                      "primary-fixed-dim": "#ccbeff",
+                      "on-tertiary-fixed-variant": "#49454d",
+                      "on-error-container": "#ffdad6",
+                      "on-tertiary": "#322f36",
+                      "on-tertiary-container": "#46434a",
+                      "tertiary": "#d1cbd4",
+                      "on-secondary-container": "#b9b3bf",
+                      "error-container": "#93000a",
+                      "surface-bright": "#38393b",
+                      "tertiary-fixed": "#e7e0e9",
+                      "on-tertiary-fixed": "#1d1a21",
+                      "primary": "#d3c5ff",
+                      "surface-tint": "#ccbeff",
+                      "primary-fixed": "#e7deff",
+                      "on-primary-fixed": "#1f025e",
+                      "secondary-container": "#49454f",
+                      "on-surface-variant": "#cac4d2",
+                      "on-secondary-fixed": "#1d1a23",
+                      "on-primary": "#342073",
+                      "outline-variant": "#484551",
+                      "outline": "#938f9c",
+                      "tertiary-fixed-dim": "#cac4cd",
+                      "surface-variant": "#343537",
+                      "error": "#ffb4ab",
+                      "surface-dim": "#121315",
+                      "on-secondary-fixed-variant": "#49454f",
+                      "surface-container": "#1e2021",
+                      "inverse-primary": "#6351a4",
+                      "on-surface": "#e3e2e4",
+                      "background": "#121315",
+                      "on-primary-container": "#483688",
+                      "primary-container": "#b8a5ff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "base": "8px",
+                      "gutter": "16px",
+                      "margin-desktop": "40px",
+                      "margin-mobile": "20px",
+                      "touch-target-min": "44px"
+              },
+              "fontFamily": {
+                      "h1": [
+                              "Space Grotesk"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "h2": [
+                              "Space Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "h1": [
+                              "40px",
+                              {
+                                      "lineHeight": "1.1",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "1",
+                                      "letterSpacing": "0.04em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "h2": [
+                              "32px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex items-center justify-center overflow-hidden relative">
+<!-- Horizontal Step Progress Indicator -->
+<div class="absolute top-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 bg-surface-container-high/50 backdrop-blur-md px-6 py-3 rounded-full border border-white/5 shadow-lg">
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+<span>上传照片</span>
+</div>
+<div class="w-8 h-[1px] bg-surface-container-highest"></div>
+<div class="flex items-center gap-2 text-primary font-body-md text-sm font-medium">
+<span class="material-symbols-outlined text-[18px]">model_training</span>
+<span>生成中</span>
+</div>
+<div class="w-8 h-[1px] bg-surface-container-highest"></div>
+<div class="flex items-center gap-2 text-on-surface-variant/50 font-body-md text-sm">
+<span class="material-symbols-outlined text-[18px]">done_all</span>
+<span>完成</span>
+</div>
+</div>
+<!-- Fluid Gradient Mesh Background -->
+<div class="absolute inset-0 overflow-hidden pointer-events-none">
+<div class="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-primary/10 blur-[120px] mix-blend-screen"></div>
+<div class="absolute bottom-[-20%] right-[-10%] w-[70vw] h-[70vw] rounded-full bg-inverse-primary/15 blur-[150px] mix-blend-screen"></div>
+<div class="absolute top-[30%] left-[40%] w-[40vw] h-[40vw] rounded-full bg-primary-container/5 blur-[100px] mix-blend-screen"></div>
+</div>
+<!-- Main Glassmorphic Container -->
+<main class="relative z-10 w-full max-w-md px-margin-mobile md:px-0 flex flex-col items-center">
+<div class="w-full bg-surface-container-low/40 backdrop-blur-3xl rounded-[32px] p-8 md:p-12 border-t border-l border-white/5 shadow-2xl flex flex-col items-center relative overflow-hidden">
+<!-- Subtle inner glow for depth -->
+<div class="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
+<!-- Animated Icon representation (Static due to constraints, visual glow applied) -->
+<div class="relative w-28 h-28 flex items-center justify-center mb-10">
+<div class="absolute inset-0 bg-primary-container/20 rounded-full blur-2xl"></div>
+<div class="relative w-20 h-20 rounded-full bg-surface-container/60 backdrop-blur-md border border-white/10 flex items-center justify-center shadow-[inset_0_2px_10px_rgba(255,255,255,0.05)]">
+<span class="material-symbols-outlined text-h1 font-h1 text-primary" style="font-variation-settings: 'FILL' 1;">
+                        auto_awesome
+                    </span>
+</div>
+</div>
+<!-- Title -->
+<h1 class="font-h2 text-h2 text-on-surface text-center mb-12 tracking-tight">
+                AI 正在生成您的专属写真...
+            </h1>
+<!-- Progress Section -->
+<div class="w-full flex flex-col gap-base">
+<div class="flex justify-between items-end px-2">
+<span class="font-body-md text-body-md text-primary font-medium tracking-wide">处理中</span>
+<span class="font-h1 text-h1 text-primary-container leading-none">68%</span>
+</div>
+<!-- Progress Bar Track -->
+<div class="h-3 w-full bg-surface-container-highest/50 rounded-full overflow-hidden border border-white/5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]">
+<!-- Progress Fill -->
+<div class="h-full bg-primary-container w-[68%] rounded-full shadow-[0_0_15px_rgba(184,165,255,0.4)] relative">
+<div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
