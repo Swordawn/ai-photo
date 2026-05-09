@@ -1,6 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import { writeFile, mkdir, readdir, unlink, readFile } from 'fs/promises'
+import { writeFile, mkdir, readdir, unlink, readFile, rm } from 'fs/promises'
 import { join, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
@@ -15,14 +15,30 @@ const app = express()
 const PORT = 3001
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '888888'
 const startTime = Date.now()
+const isWin = process.platform === 'win32'
 
-// OTA 自动更新
+// OTA 热更新（零依赖，纯 Node.js 内置模块）
 const OTA_URL = 'https://raw.githubusercontent.com/Swordawn/ai-photo/main/ota.json'
-const OTA_INTERVAL = 30 * 60 * 1000 // 30分钟检查一次
+const OTA_TREE_URL = 'https://api.github.com/repos/Swordawn/ai-photo/git/trees/main?recursive=1'
+const OTA_RAW_BASE = 'https://raw.githubusercontent.com/Swordawn/ai-photo/main/'
+const OTA_INTERVAL = 30 * 60 * 1000
 const PKG_PATH = join(__dirname, 'package.json')
+const OTA_STATE_PATH = join(__dirname, '.ota-state.json')
+const OTA_SKIP = ['node_modules/', '.env', 'uploads/', 'cloudflared.exe', '.git/', '.tunnel-url', '__update_tmp__/', '__update__.zip']
 let localVersion = '1.0.0'
-let updateStatus = 'idle' // idle | checking | updating | done | error
+let localSha = ''
+let updateStatus = 'idle'
 let updateMessage = ''
+
+// 读取本地版本和 SHA
+try {
+  const pkg = JSON.parse(await readFile(PKG_PATH, 'utf-8'))
+  localVersion = pkg.version || '1.0.0'
+} catch {}
+try {
+  const state = JSON.parse(await readFile(OTA_STATE_PATH, 'utf-8'))
+  localSha = state.sha || ''
+} catch {}
 
 try {
   const pkg = JSON.parse(await readFile(PKG_PATH, 'utf-8'))
@@ -486,9 +502,12 @@ function checkUpdate(){toast('正在检查...');api('/api/admin/check-update').t
 const CLOUDFLARED_BIN = join(__dirname, 'cloudflared.exe')
 const TUNNEL_TOKEN = process.env.CLOUDFLARE_TUNNEL_TOKEN || ''
 
-// ===== OTA 自动更新（不依赖 git，纯 server.js 内完成）=====
-const OTA_ZIP_URL = 'https://github.com/Swordawn/ai-photo/archive/refs/heads/main.zip'
-const SKIP_COPY = ['node_modules', '.env', 'uploads', 'cloudflared.exe', '.git', '.tunnel-url']
+// ===== OTA 热更新（纯 Node.js，零外部依赖）=====
+
+// 跳过路径检查
+function shouldSkip(path) {
+  return OTA_SKIP.some(s => path.startsWith(s) || path === s.replace(/\/$/, ''))
+}
 
 async function checkForUpdate() {
   try {
@@ -505,97 +524,127 @@ async function performUpdate() {
   updateStatus = 'updating'
   updateMessage = '正在更新...'
 
-  const tmpZip = join(__dirname, '__update__.zip')
-  const tmpDir = join(__dirname, '__update_tmp__')
-
   try {
-    // 1. 下载 zip
-    updateMessage = '下载更新包...'
-    const resp = await fetch(OTA_ZIP_URL, { signal: AbortSignal.timeout(120000) })
-    if (!resp.ok) throw new Error(`下载失败 HTTP ${resp.status}`)
-    const buf = Buffer.from(await resp.arrayBuffer())
-    await writeFile(tmpZip, buf)
+    // 1. 获取远程文件树
+    updateMessage = '检查文件差异...'
+    const treeResp = await fetch(OTA_TREE_URL, {
+      headers: { 'User-Agent': 'ai-photo-booth' },
+      signal: AbortSignal.timeout(30000),
+    })
+    if (!treeResp.ok) throw new Error(`获取文件树失败: ${treeResp.status}`)
+    const treeData = await treeResp.json()
+    const remoteFiles = treeData.tree.filter(f => f.type === 'blob' && !shouldSkip(f.path))
+    const remoteSha = treeData.sha
 
-    // 2. 解压
-    updateMessage = '解压文件...'
-    if (existsSync(tmpDir)) execSync(`rd /s /q "${tmpDir}"`, { stdio: 'ignore' })
-    execSync(`tar -xf "${tmpZip}" -C "${tmpDir}" --strip-components=1`, { cwd: __dirname, timeout: 60000 })
+    // 2. 对比差异（SHA 不同的文件才下载）
+    const toDownload = []
+    let localFileMap = {}
+    try {
+      const state = JSON.parse(await readFile(OTA_STATE_PATH, 'utf-8'))
+      localFileMap = state.files || {}
+    } catch {}
 
-    // 3. 覆盖文件（跳过敏感/运行时目录）
-    updateMessage = '覆盖文件...'
-    const items = await readdir(tmpDir)
-    for (const item of items) {
-      if (SKIP_COPY.includes(item)) continue
-      const src = join(tmpDir, item)
-      const dst = join(__dirname, item)
-      try {
-        execSync(`rd /s /q "${dst}"`, { stdio: 'ignore' })
-      } catch {}
-      try {
-        execSync(`xcopy "${src}" "${dst}" /E /I /Y /Q`, { stdio: 'ignore' })
-      } catch {}
+    for (const file of remoteFiles) {
+      if (localFileMap[file.path] !== file.sha) {
+        toDownload.push(file)
+      }
     }
 
-    // 4. 安装依赖
-    updateMessage = '安装依赖...'
-    execSync('npm install', { cwd: __dirname, timeout: 120000 })
+    if (toDownload.length === 0 && remoteSha === localSha) {
+      updateStatus = 'idle'
+      updateMessage = '无更新'
+      return
+    }
 
-    // 5. 读取新版本号
+    // 3. 逐个下载变更文件
+    updateMessage = `下载 ${toDownload.length} 个文件...`
+    let downloaded = 0
+    for (const file of toDownload) {
+      const url = OTA_RAW_BASE + encodeURI(file.path)
+      const localPath = join(__dirname, file.path)
+      const dir = dirname(localPath)
+
+      // 确保目录存在
+      if (!existsSync(dir)) await mkdir(dir, { recursive: true })
+
+      const resp = await fetch(url, { signal: AbortSignal.timeout(30000) })
+      if (!resp.ok) {
+        console.warn(`[OTA] 跳过 ${file.path}: HTTP ${resp.status}`)
+        continue
+      }
+      const buf = Buffer.from(await resp.arrayBuffer())
+      await writeFile(localPath, buf)
+      localFileMap[file.path] = file.sha
+      downloaded++
+
+      // 每 10 个文件更新一次进度
+      if (downloaded % 10 === 0) {
+        updateMessage = `下载中 ${downloaded}/${toDownload.length}...`
+      }
+    }
+
+    // 4. 删除远程已移除的文件
+    const remotePaths = new Set(remoteFiles.map(f => f.path))
+    for (const [path] of Object.entries(localFileMap)) {
+      if (!remotePaths.has(path) && !shouldSkip(path)) {
+        try { await unlink(join(__dirname, path)) } catch {}
+        delete localFileMap[path]
+      }
+    }
+
+    // 5. 安装依赖
+    updateMessage = '安装依赖...'
+    await new Promise((resolve, reject) => {
+      const cmd = isWin ? 'npm.cmd' : 'npm'
+      const child = spawn(cmd, ['install'], { cwd: __dirname, stdio: 'ignore' })
+      child.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install 退出码 ${code}`)))
+      child.on('error', reject)
+    })
+
+    // 6. 保存更新状态
     try {
       const pkg = JSON.parse(await readFile(PKG_PATH, 'utf-8'))
       localVersion = pkg.version || localVersion
     } catch {}
-
-    // 6. 清理临时文件
-    try { execSync(`rd /s /q "${tmpDir}"`, { stdio: 'ignore' }) } catch {}
-    try { execSync(`del /q "${tmpZip}"`, { stdio: 'ignore' }) } catch {}
+    localSha = remoteSha
+    await writeFile(OTA_STATE_PATH, JSON.stringify({ sha: remoteSha, files: localFileMap, updated: new Date().toISOString() }))
 
     updateStatus = 'done'
-    updateMessage = `更新完成 v${localVersion}，正在重启...`
+    updateMessage = `更新完成 v${localVersion}（${downloaded} 个文件），正在重启...`
 
-    // 7. 自动重启（spawn 新进程，当前进程退出）
+    // 7. 自动重启
     setTimeout(() => {
-      const isWin = process.platform === 'win32'
       const cmd = isWin ? 'npm.cmd' : 'npm'
-      const child = spawn(cmd, ['start'], {
-        cwd: __dirname,
-        detached: true,
-        stdio: 'ignore',
-        ...(isWin ? { windowsHide: true } : {}),
-      })
+      const child = spawn(cmd, ['start'], { cwd: __dirname, detached: true, stdio: 'ignore', ...(isWin ? { windowsHide: true } : {}) })
       child.unref()
       process.exit(0)
     }, 2000)
   } catch (err) {
     updateStatus = 'error'
     updateMessage = `更新失败: ${err.message}`
-    try { execSync(`rd /s /q "${tmpDir}"`, { stdio: 'ignore' }) } catch {}
-    try { execSync(`del /q "${tmpZip}"`, { stdio: 'ignore' }) } catch {}
   }
 }
 
-// 管理 API：检查更新
+// 管理 API
 app.get('/api/admin/check-update', authMiddleware, async (req, res) => {
   const remote = await checkForUpdate()
   res.json({ localVersion, remoteVersion: remote?.version || null, hasUpdate: !!remote, status: updateStatus, message: updateMessage })
 })
 
-// 管理 API：执行更新
 app.post('/api/admin/do-update', authMiddleware, (req, res) => {
   performUpdate()
   res.json({ success: true, message: '更新已启动' })
 })
 
-// 管理 API：OTA 状态
 app.get('/api/admin/ota-status', authMiddleware, (req, res) => {
   res.json({ localVersion, status: updateStatus, message: updateMessage })
 })
 
-// 定时自动检查更新
+// 定时检查
 setInterval(async () => {
   const remote = await checkForUpdate()
   if (remote) {
-    console.log(`发现新版本 ${remote.version}，自动更新...`)
+    console.log(`[OTA] 发现新版本 ${remote.version}，自动更新...`)
     await performUpdate()
   }
 }, OTA_INTERVAL)
