@@ -486,19 +486,18 @@ function checkUpdate(){toast('正在检查...');api('/api/admin/check-update').t
 const CLOUDFLARED_BIN = join(__dirname, 'cloudflared.exe')
 const TUNNEL_TOKEN = process.env.CLOUDFLARE_TUNNEL_TOKEN || ''
 
-// ===== OTA 自动更新 =====
+// ===== OTA 自动更新（不依赖 git，纯 server.js 内完成）=====
+const OTA_ZIP_URL = 'https://github.com/Swordawn/ai-photo/archive/refs/heads/main.zip'
+const SKIP_COPY = ['node_modules', '.env', 'uploads', 'cloudflared.exe', '.git', '.tunnel-url']
+
 async function checkForUpdate() {
   try {
     const resp = await fetch(OTA_URL, { signal: AbortSignal.timeout(10000) })
     if (!resp.ok) return null
     const remote = await resp.json()
-    if (remote.version && remote.version !== localVersion) {
-      return remote
-    }
+    if (remote.version && remote.version !== localVersion) return remote
     return null
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 async function performUpdate() {
@@ -506,47 +505,84 @@ async function performUpdate() {
   updateStatus = 'updating'
   updateMessage = '正在更新...'
 
-  try {
-    // git pull
-    updateMessage = '拉取代码...'
-    execSync('git pull origin main', { cwd: __dirname, timeout: 60000 })
+  const tmpZip = join(__dirname, '__update__.zip')
+  const tmpDir = join(__dirname, '__update_tmp__')
 
-    // npm install
+  try {
+    // 1. 下载 zip
+    updateMessage = '下载更新包...'
+    const resp = await fetch(OTA_ZIP_URL, { signal: AbortSignal.timeout(120000) })
+    if (!resp.ok) throw new Error(`下载失败 HTTP ${resp.status}`)
+    const buf = Buffer.from(await resp.arrayBuffer())
+    await writeFile(tmpZip, buf)
+
+    // 2. 解压
+    updateMessage = '解压文件...'
+    if (existsSync(tmpDir)) execSync(`rd /s /q "${tmpDir}"`, { stdio: 'ignore' })
+    execSync(`tar -xf "${tmpZip}" -C "${tmpDir}" --strip-components=1`, { cwd: __dirname, timeout: 60000 })
+
+    // 3. 覆盖文件（跳过敏感/运行时目录）
+    updateMessage = '覆盖文件...'
+    const items = await readdir(tmpDir)
+    for (const item of items) {
+      if (SKIP_COPY.includes(item)) continue
+      const src = join(tmpDir, item)
+      const dst = join(__dirname, item)
+      try {
+        execSync(`rd /s /q "${dst}"`, { stdio: 'ignore' })
+      } catch {}
+      try {
+        execSync(`xcopy "${src}" "${dst}" /E /I /Y /Q`, { stdio: 'ignore' })
+      } catch {}
+    }
+
+    // 4. 安装依赖
     updateMessage = '安装依赖...'
     execSync('npm install', { cwd: __dirname, timeout: 120000 })
 
-    // 读取新版本号
+    // 5. 读取新版本号
     try {
       const pkg = JSON.parse(await readFile(PKG_PATH, 'utf-8'))
       localVersion = pkg.version || localVersion
     } catch {}
 
-    updateStatus = 'done'
-    updateMessage = `更新完成 (${localVersion})，正在重启...`
+    // 6. 清理临时文件
+    try { execSync(`rd /s /q "${tmpDir}"`, { stdio: 'ignore' }) } catch {}
+    try { execSync(`del /q "${tmpZip}"`, { stdio: 'ignore' }) } catch {}
 
-    // 延迟重启，让响应返回给客户端
-    setTimeout(() => process.exit(0), 2000)
+    updateStatus = 'done'
+    updateMessage = `更新完成 v${localVersion}，正在重启...`
+
+    // 7. 自动重启（spawn 新进程，当前进程退出）
+    setTimeout(() => {
+      const isWin = process.platform === 'win32'
+      const cmd = isWin ? 'npm.cmd' : 'npm'
+      const child = spawn(cmd, ['start'], {
+        cwd: __dirname,
+        detached: true,
+        stdio: 'ignore',
+        ...(isWin ? { windowsHide: true } : {}),
+      })
+      child.unref()
+      process.exit(0)
+    }, 2000)
   } catch (err) {
     updateStatus = 'error'
     updateMessage = `更新失败: ${err.message}`
+    try { execSync(`rd /s /q "${tmpDir}"`, { stdio: 'ignore' }) } catch {}
+    try { execSync(`del /q "${tmpZip}"`, { stdio: 'ignore' }) } catch {}
   }
 }
 
 // 管理 API：检查更新
 app.get('/api/admin/check-update', authMiddleware, async (req, res) => {
   const remote = await checkForUpdate()
-  res.json({
-    localVersion,
-    remoteVersion: remote?.version || null,
-    hasUpdate: !!remote,
-    status: updateStatus,
-    message: updateMessage,
-  })
+  res.json({ localVersion, remoteVersion: remote?.version || null, hasUpdate: !!remote, status: updateStatus, message: updateMessage })
 })
 
 // 管理 API：执行更新
-app.post('/api/admin/do-update', authMiddleware, async (req, res) => {
-  performUpdate() // fire and forget
+app.post('/api/admin/do-update', authMiddleware, (req, res) => {
+  performUpdate()
   res.json({ success: true, message: '更新已启动' })
 })
 
