@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { writeFile, mkdir, readdir, unlink, readFile } from 'fs/promises'
-import { join, dirname } from 'path'
+import { join, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
 import { spawn, execSync } from 'child_process'
@@ -61,7 +61,7 @@ app.use('/api/report-page', apiGateMiddleware)
 
 // ===== 管理员认证 =====
 function authMiddleware(req, res, next) {
-  const token = req.headers['x-admin-password'] || req.query.pwd
+  const token = req.headers['x-admin-password']
   if (token !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: '未授权' })
   }
@@ -76,12 +76,18 @@ app.post('/api/upload', async (req, res) => {
     if (!image) return res.status(400).json({ error: '没有图片数据' })
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
     const buffer = Buffer.from(base64Data, 'base64')
-    const uniqueFilename = filename || `photo_${Date.now()}.jpg`
+    const sanitized = (filename || `photo_${Date.now()}.jpg`).replace(/\.\.|[\/\\]/g, '')
+    const uniqueFilename = sanitized || `photo_${Date.now()}.jpg`
     const filepath = join(uploadsDir, uniqueFilename)
     const dir = dirname(filepath)
     if (!existsSync(dir)) await mkdir(dir, { recursive: true })
     await writeFile(filepath, buffer)
-    // 今日拍照计数
+    // 今日拍照计数（按日重置）
+    const today = new Date().toISOString().slice(0, 10)
+    if (app.get('todayDate') !== today) {
+      app.set('todayDate', today)
+      app.set('todayCount', 0)
+    }
     app.set('todayCount', (app.get('todayCount') || 0) + 1)
     // 使用 CF 隧道域名，确保扫码可访问
     const publicHost = process.env.PUBLIC_HOST || req.headers.host || `localhost:${PORT}`
@@ -96,6 +102,10 @@ app.post('/api/upload', async (req, res) => {
 app.get('/download/:filename', (req, res) => {
   const { filename } = req.params
   const filepath = join(uploadsDir, filename)
+  const resolved = resolve(filepath)
+  if (!resolved.startsWith(resolve(uploadsDir))) {
+    return res.status(403).json({ error: '禁止访问' })
+  }
   if (!existsSync(filepath)) return res.status(404).json({ error: '文件不存在' })
   res.download(filepath, filename)
 })
@@ -355,7 +365,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <div class="main-area">
 <div class="status-bar">
 <div class="status-left"><div class="status-dot" id="statusDot"></div><span class="status-title">自助机管理后台</span></div>
-<div class="status-right"><span id="versionTag" style="font-size:11px;color:var(--text-muted)"></span><button class="btn-logout" onclick="checkUpdate()" style="margin-right:6px">检查更新</button><button class="btn-logout" onclick="doLogout()">登出</button></div>
+<div class="status-right"><span id="uptimeTag" style="font-size:11px;color:var(--text-muted)"></span><span id="versionTag" style="font-size:11px;color:var(--text-muted)"></span><button class="btn-logout" onclick="checkUpdate()" style="margin-right:6px">检查更新</button><button class="btn-logout" onclick="doLogout()">登出</button></div>
 </div>
 <div class="stats-bar">
 <div class="stat-card"><div class="stat-num" id="sPage">-</div><div class="stat-label">当前页面</div></div>
@@ -400,7 +410,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <div id="modalRoot"></div>
 <script>
 let pwd='';
-function api(p,m,b){return fetch(p,{method:m||'GET',headers:{'Content-Type':'application/json','X-Admin-Password':pwd},body:b?JSON.stringify(b):undefined}).then(r=>r.json())}
+let _statusInterval=null;
+function api(p,m,b){return fetch(p,{method:m||'GET',headers:{'Content-Type':'application/json','X-Admin-Password':pwd},body:b?JSON.stringify(b):undefined}).then(r=>r.json()).catch(()=>({error:'网络错误'}))}
 function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500)}
 function showModal(title,text,btns){
 return new Promise(r=>{const o=document.createElement('div');o.className='modal-overlay';
@@ -419,7 +430,7 @@ return r.json()
 if(!r||r.error){document.getElementById('loginError').textContent='密码错误';document.getElementById('loginError').style.display='block';return}
 document.getElementById('loginPage').style.display='none';
 document.getElementById('appPage').classList.add('show');
-loadAll();setInterval(loadStatus,10000)
+loadAll();if(_statusInterval)clearInterval(_statusInterval);_statusInterval=setInterval(loadStatus,10000)
 }).catch(e=>{
 document.getElementById('loginError').textContent='网络错误，请检查连接';
 document.getElementById('loginError').style.display='block'
@@ -502,7 +513,7 @@ async function performUpdate() {
 
     // npm install
     updateMessage = '安装依赖...'
-    execSync('npm install --production', { cwd: __dirname, timeout: 120000 })
+    execSync('npm install', { cwd: __dirname, timeout: 120000 })
 
     // 读取新版本号
     try {
@@ -556,16 +567,39 @@ setInterval(async () => {
 function startTunnel() {
   if (!existsSync(CLOUDFLARED_BIN) || !TUNNEL_TOKEN) return
 
-  const tunnel = spawn(CLOUDFLARED_BIN, ['tunnel', 'run', '--token', TUNNEL_TOKEN], {
-    stdio: 'ignore',
-    windowsHide: true,
-  })
+  try {
+    const tunnel = spawn(CLOUDFLARED_BIN, ['tunnel', 'run', '--token', TUNNEL_TOKEN], {
+      stdio: 'ignore',
+      windowsHide: true,
+    })
 
-  tunnel.unref()
+    tunnel.unref()
 
-  const cleanup = () => { try { tunnel.kill() } catch {} }
-  process.on('exit', cleanup)
+    tunnel.on('error', (err) => {
+      console.error('cloudflared 启动失败:', err.message)
+      setTimeout(startTunnel, 5000)
+    })
+
+    tunnel.on('exit', (code) => {
+      if (code !== 0) {
+        console.warn(`cloudflared 退出 (code=${code})，5秒后重启...`)
+        setTimeout(startTunnel, 5000)
+      }
+    })
+
+    const cleanup = () => { try { tunnel.kill() } catch {} }
+    process.on('exit', cleanup)
+  } catch (err) {
+    console.error('cloudflared spawn 失败:', err.message)
+    setTimeout(startTunnel, 5000)
+  }
 }
+
+// ===== 优雅退出 =====
+process.on('SIGINT', () => {
+  console.log('\n收到 SIGINT，正在关闭...')
+  process.exit(0)
+})
 
 // ===== 启动 =====
 app.listen(PORT, '0.0.0.0', () => {

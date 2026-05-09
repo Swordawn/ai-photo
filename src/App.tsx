@@ -143,10 +143,10 @@ export default function App() {
           />
         )}
 
-        {state.page === 'compose' && (
+        {state.page === 'compose' && state.capturedPhoto && (
           <ComposePage
             key="compose"
-            capturedPhoto={state.capturedPhoto!}
+            capturedPhoto={state.capturedPhoto}
             selectedStyle={state.selectedStyle}
             selectedFrame={state.selectedFrame}
             onSelectStyle={setSelectedStyle}
@@ -158,10 +158,10 @@ export default function App() {
           />
         )}
 
-        {state.page === 'print' && (
+        {state.page === 'print' && state.resultImage && (
           <PrintPage
             key="print"
-            resultImage={state.resultImage!}
+            resultImage={state.resultImage}
             originalPhoto={state.capturedPhoto}
             selectedFrame={state.selectedFrame}
             qrUrl={serverUrl}

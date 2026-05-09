@@ -48,16 +48,32 @@ export async function generateAIImage(
 
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
-  const submitRes = await fetch(SUBMIT_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-      'X-DashScope-Async': 'enable',
-    },
-    body: JSON.stringify(requestBody),
-    signal,
-  })
+  // 30秒超时
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), 30000)
+  // 外部 abort 时同步取消超时 controller
+  const onExternalAbort = () => timeoutController.abort()
+  signal?.addEventListener('abort', onExternalAbort)
+
+  let submitRes: Response
+  try {
+    submitRes = await fetch(SUBMIT_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+        'X-DashScope-Async': 'enable',
+      },
+      body: JSON.stringify(requestBody),
+      signal: timeoutController.signal,
+    })
+  } catch (err) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    throw new Error('提交任务超时（30秒），请检查网络后重试')
+  } finally {
+    clearTimeout(timeoutId)
+    signal?.removeEventListener('abort', onExternalAbort)
+  }
 
   console.log('[generate] 提交响应状态:', submitRes.status)
 
@@ -77,6 +93,8 @@ export async function generateAIImage(
   // Step 2: 轮询任务状态（每3秒，最多60秒）
   const startTime = Date.now()
 
+  let consecutiveErrors = 0
+
   while (Date.now() - startTime < MAX_WAIT) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL))
 
@@ -90,9 +108,15 @@ export async function generateAIImage(
     })
 
     if (!pollRes.ok) {
-      console.warn('[generate] 轮询HTTP错误:', pollRes.status)
+      consecutiveErrors++
+      console.warn('[generate] 轮询HTTP错误:', pollRes.status, `(连续第${consecutiveErrors}次)`)
+      if (consecutiveErrors >= 3) {
+        throw new Error(`轮询连续失败${consecutiveErrors}次 (HTTP ${pollRes.status})，请重试`)
+      }
       continue
     }
+
+    consecutiveErrors = 0
 
     const pollData = await pollRes.json()
     const status = pollData.output?.task_status

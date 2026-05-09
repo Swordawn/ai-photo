@@ -13,14 +13,14 @@ export async function autoSaveImage(base64Image: string): Promise<string | null>
     })
 
     if (!resp.ok) {
-      console.warn('[autoSave] 服务器返回错误:', resp.status)
-      return null
+      console.error('[autoSave] 服务器返回错误:', resp.status)
+      return '__UPLOAD_FAILED__'
     }
 
     const data = await resp.json()
     return data.url || null
   } catch (err) {
-    console.warn('[autoSave] 保存失败:', err)
-    return null
+    console.error('[autoSave] 保存失败:', err)
+    return '__UPLOAD_FAILED__'
   }
 }

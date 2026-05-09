@@ -43,7 +43,10 @@ export async function compositeFrame(
   const canvas = document.createElement('canvas')
   canvas.width = frame.naturalWidth || frame.width
   canvas.height = frame.naturalHeight || frame.height
-  const ctx = canvas.getContext('2d')!
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('无法创建Canvas 2D上下文，浏览器可能不支持Canvas')
+  }
 
   // 照片填充整个画布（cover模式，确保不留白边）
   const frameAspect = canvas.width / canvas.height
@@ -70,5 +73,9 @@ export async function compositeFrame(
   // 叠加相框（相框透明区域透出照片）
   ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
 
-  return canvas.toDataURL('image/jpeg', 0.95)
+  try {
+    return canvas.toDataURL('image/jpeg', 0.95)
+  } catch (err) {
+    throw new Error(`Canvas导出图片失败: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }

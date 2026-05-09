@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { FRAMES, getFrameSrc } from '../data/frames'
 
 const STYLES = [
@@ -28,11 +28,13 @@ export default function ComposePage({
 }: Props) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const generatingRef = useRef(false)
 
   const currentFrameSrc = selectedFrame ? getFrameSrc(selectedFrame) : null
 
   const handleGenerate = useCallback(async () => {
-    if (isGenerating) return
+    if (generatingRef.current) return
+    generatingRef.current = true
     const styleId = selectedStyle || STYLES[0].id
     const controller = new AbortController()
     setAbortController(controller)
@@ -42,10 +44,11 @@ export default function ComposePage({
     } catch {
       // handled by parent
     } finally {
+      generatingRef.current = false
       setIsGenerating(false)
       setAbortController(null)
     }
-  }, [isGenerating, selectedStyle, onGenerate])
+  }, [selectedStyle, onGenerate])
 
   const handleCancel = useCallback(() => {
     abortController?.abort()

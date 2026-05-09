@@ -19,6 +19,8 @@ interface Props {
 export default function CameraPage({ onCapture, onBack: _, selectedFrame, onSelectFrame }: Props) {
   const webcamRef = useRef<Webcam>(null)
   const [isCameraReady, setIsCameraReady] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const [cameraKey, setCameraKey] = useState(0)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const [flash, setFlash] = useState(false)
   const [captured, setCaptured] = useState<string | null>(null)
@@ -75,6 +77,13 @@ export default function CameraPage({ onCapture, onBack: _, selectedFrame, onSele
 
   const handleRetake = useCallback(() => {
     setCaptured(null)
+    setCameraError(null)
+  }, [])
+
+  const handleRetryCamera = useCallback(() => {
+    setCameraError(null)
+    setIsCameraReady(false)
+    setCameraKey(k => k + 1)
   }, [])
 
   const handleNext = useCallback(() => {
@@ -112,12 +121,21 @@ export default function CameraPage({ onCapture, onBack: _, selectedFrame, onSele
             }} />
           ) : (
             <Webcam
+              key={cameraKey}
               ref={webcamRef}
               audio={false}
               screenshotFormat="image/jpeg"
               screenshotQuality={0.9}
               videoConstraints={{ width: 720, height: 1080, facingMode }}
-              onUserMedia={() => setIsCameraReady(true)}
+              onUserMedia={() => { setIsCameraReady(true); setCameraError(null) }}
+              onUserMediaError={(err) => {
+                console.error('[Camera] 摄像头访问失败:', err)
+                setCameraError(
+                  err instanceof DOMException && err.name === 'NotAllowedError'
+                    ? '摄像头权限被拒绝，请在浏览器设置中允许摄像头访问'
+                    : '无法访问摄像头，请检查设备是否连接'
+                )
+              }}
               mirrored={false}
               style={{
                 position: 'absolute', inset: 0,
@@ -215,8 +233,26 @@ export default function CameraPage({ onCapture, onBack: _, selectedFrame, onSele
             }} />
           )}
 
-          {/* 未就绪 */}
-          {!isCameraReady && !captured && (
+          {/* 摄像头错误 */}
+          {cameraError && !captured && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 20, gap: 16, padding: '0 24px',
+            }}>
+              <p style={{ color: '#ff6b6b', fontSize: 36 }}>📷</p>
+              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14, textAlign: 'center' }}>{cameraError}</p>
+              <button onClick={handleRetryCamera} style={{
+                background: '#1565C0', color: 'white', border: 'none', borderRadius: 8,
+                padding: '8px 24px', fontSize: 13, cursor: 'pointer', marginTop: 8,
+              }}>
+                重试
+              </button>
+            </div>
+          )}
+
+          {/* 未就绪（仅在无错误时显示） */}
+          {!isCameraReady && !captured && !cameraError && (
             <div style={{
               position: 'absolute', inset: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
