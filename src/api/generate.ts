@@ -132,7 +132,9 @@ export async function generateAIImage(
     console.log('[generate] 任务状态:', status)
 
     if (status === 'SUCCEEDED') {
-      const resultUrl = pollData.output?.results?.[0]?.url
+      // 新版 API 格式：output.choices[0].message.content[0].image
+      const content = pollData.output?.choices?.[0]?.message?.content
+      const resultUrl = content?.[0]?.image
       console.log('[generate] 生成完成! url:', resultUrl?.slice(0, 80))
       if (resultUrl) return resultUrl
       throw new Error('任务成功但未返回结果URL')
