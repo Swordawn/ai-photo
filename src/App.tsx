@@ -2,10 +2,7 @@ import { useCallback, useState, useEffect, useRef } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAppState } from './state/useAppState'
 import { generateAIImage } from './api/generate'
-import { compositeFrame } from './utils/compositeFrame'
 import { apiFetch } from './apiBase'
-import { autoSaveImage } from './utils/autoSave'
-import { getFrameSrc } from './data/frames'
 
 import FloatingCatkins from './components/FloatingCatkins'
 import HomePage from './components/HomePage'
@@ -165,36 +162,42 @@ export default function App() {
     if (!state.capturedPhoto) return
 
     setSelectedStyle(styleId)
+    console.log('[handleGenerate] 开始生成, styleId:', styleId)
 
     try {
+      // AI生成图片（返回远程URL）
       const aiResult = await generateAIImage(
         state.capturedPhoto,
         styleId,
         state.mockMode,
         signal
       )
+      console.log('[handleGenerate] AI生成完成, url:', aiResult?.slice(0, 80))
 
-      // 合成：在 AI 结果上叠加相框
-      let finalImage = aiResult
-      if (state.selectedFrame) {
-        const frameSrc = getFrameSrc(state.selectedFrame)
-        if (frameSrc) {
-          finalImage = await compositeFrame(aiResult, frameSrc)
-        }
-      }
+      // 保存照片与登记关联
+      const filename = `photo_${Date.now()}.jpg`
+      apiFetch('/api/save-photo-record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          regId: registration?.id || null,
+          filename,
+          style: styleId
+        })
+      }).catch(() => {})
 
-      // 自动保存到服务器，获取 URL 用于二维码
-      const url = await autoSaveImage(finalImage)
-      setServerUrl(url)
+      // 跳过前端合成，直接用AI生成的URL
+      console.log('[handleGenerate] 跳转到结果页')
+      setResultImage(aiResult)
+      setServerUrl(aiResult)
+      setErrorMsg(null)
 
       // 标记登记已使用
       if (registration) {
         apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
       }
-
-      setResultImage(finalImage)
-      setErrorMsg(null)
     } catch (err) {
+      console.error('[handleGenerate] 错误:', err)
       const message = err instanceof Error ? err.message : '生成失败'
       setErrorMsg(message)
     }

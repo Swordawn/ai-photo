@@ -17,7 +17,7 @@ export default function PrintPage({
 }: Props) {
   const [showPrintConfirm, setShowPrintConfirm] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [countdown, setCountdown] = useState(14)
+  const [countdown, setCountdown] = useState(90)
 
   const frameSrc = selectedFrame ? getFrameSrc(selectedFrame) : null
 

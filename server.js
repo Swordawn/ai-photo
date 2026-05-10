@@ -400,6 +400,19 @@ app.post('/api/registration/:id/use', (req, res) => {
   res.json({ success: true })
 })
 
+// 保存照片与登记关联
+app.post('/api/save-photo-record', (req, res) => {
+  try {
+    const { regId, filename, style } = req.body
+    if (!filename) return res.status(400).json({ error: '缺少 filename' })
+    db.prepare('INSERT INTO photos (filename, style, reg_id, created_at) VALUES (?, ?, ?, datetime("now"))').run(filename, style || '', regId || null)
+    res.json({ success: true })
+  } catch (err) {
+    console.error('保存照片记录失败:', err)
+    res.status(500).json({ error: '保存失败' })
+  }
+})
+
 // 管理员：获取所有登记
 app.get('/api/admin/registrations', authMiddleware, (req, res) => {
   const rows = db.prepare('SELECT * FROM registrations ORDER BY id DESC LIMIT 100').all()

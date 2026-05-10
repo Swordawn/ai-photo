@@ -15,13 +15,18 @@ async function loadRemoteImage(url: string): Promise<HTMLImageElement> {
   if (url.startsWith('data:') || url.startsWith('blob:')) {
     return loadImage(url)
   }
+  console.log('[composite] 加载远程图片:', url.slice(0, 80))
   const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`
+  console.log('[composite] 代理URL:', proxyUrl.slice(0, 100))
   const resp = await apiFetch(proxyUrl)
+  console.log('[composite] 代理响应状态:', resp.status)
   if (!resp.ok) throw new Error(`代理图片失败 HTTP ${resp.status}`)
   const blob = await resp.blob()
+  console.log('[composite] 图片blob大小:', blob.size)
   const blobUrl = URL.createObjectURL(blob)
   const img = await loadImage(blobUrl)
   URL.revokeObjectURL(blobUrl)
+  console.log('[composite] 图片加载完成')
   return img
 }
 
