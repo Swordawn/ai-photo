@@ -96,7 +96,11 @@ export default function App() {
         .then(r => r.json())
         .then(data => {
           if (data.registration) {
-            setRegistration(data.registration)
+            // 只在 id 变化时更新，避免重复触发倒计时重置
+            setRegistration(prev => {
+              if (prev && prev.id === data.registration.id) return prev
+              return data.registration
+            })
           }
         })
         .catch(() => {})

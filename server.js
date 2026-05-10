@@ -19,6 +19,11 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '888888'
 const startTime = Date.now()
 const isWin = process.platform === 'win32'
 
+// 启动时警告默认密码
+if (ADMIN_PASSWORD === '888888') {
+  console.warn('⚠️  使用默认管理密码 888888，请在 .env 中设置 ADMIN_PASSWORD')
+}
+
 // OTA 热更新（零依赖，纯 Node.js 内置模块，使用 Gitee）
 const OTA_URL = 'https://gitee.com/Swordawn/ai-photo/raw/main/ota.json'
 const OTA_TREE_URL = 'https://gitee.com/api/v5/repos/Swordawn/ai-photo/git/trees/main?recursive=1'
@@ -47,9 +52,23 @@ try {
 } catch {}
 
 // 中间件
-app.use(cors())
+app.use(cors({
+  origin: process.env.PUBLIC_HOST ? [`https://${process.env.PUBLIC_HOST}`, `http://${process.env.PUBLIC_HOST}`] : true,
+  credentials: true,
+}))
 app.use(compression())
-app.use(express.json({ limit: '50mb' }))
+app.use(express.json({ limit: '10mb' }))
+
+// 简易速率限制（内存计数器）
+const rateLimitMap = new Map()
+function rateLimit(key, maxPerMinute = 30) {
+  const now = Date.now()
+  const entry = rateLimitMap.get(key) || { count: 0, resetAt: now + 60000 }
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 60000 }
+  entry.count++
+  rateLimitMap.set(key, entry)
+  return entry.count <= maxPerMinute
+}
 
 // 静态文件服务
 const uploadsDir = join(__dirname, 'uploads')
@@ -123,14 +142,37 @@ function authMiddleware(req, res, next) {
 // ===== 现有 API =====
 
 app.post('/api/upload', async (req, res) => {
+  // 速率限制：每 IP 每分钟最多 20 次上传
+  if (!rateLimit(`upload:${req.ip}`, 20)) {
+    return res.status(429).json({ error: '上传太频繁' })
+  }
   try {
     const { image, filename } = req.body
     if (!image) return res.status(400).json({ error: '没有图片数据' })
+    // 验证是图片 base64
+    if (!image.startsWith('data:image/')) {
+      return res.status(400).json({ error: '仅支持图片格式' })
+    }
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
     const buffer = Buffer.from(base64Data, 'base64')
-    const sanitized = (filename || `photo_${Date.now()}.jpg`).replace(/\.\.|[\/\\]/g, '')
+    // 文件大小限制（10MB）
+    if (buffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: '文件过大（最大10MB）' })
+    }
+    // 验证图片魔数
+    const isJpg = buffer[0] === 0xFF && buffer[1] === 0xD8
+    const isPng = buffer[0] === 0x89 && buffer[1] === 0x50
+    const isWebp = buffer.length > 12 && buffer.toString('ascii', 8, 12) === 'WEBP'
+    if (!isJpg && !isPng && !isWebp) {
+      return res.status(400).json({ error: '不支持的图片格式' })
+    }
+    const sanitized = (filename || `photo_${Date.now()}.jpg`).replace(/\.\.|[\/\\]/g, '').slice(0, 100)
     const uniqueFilename = sanitized || `photo_${Date.now()}.jpg`
     const filepath = join(uploadsDir, uniqueFilename)
+    const resolved = resolve(filepath)
+    if (!resolved.startsWith(resolve(uploadsDir))) {
+      return res.status(403).json({ error: '禁止访问' })
+    }
     const dir = dirname(filepath)
     if (!existsSync(dir)) await mkdir(dir, { recursive: true })
     await writeFile(filepath, buffer)
@@ -162,11 +204,25 @@ app.get('/download/:filename', (req, res) => {
   res.download(filepath, filename)
 })
 
+// 代理图片（仅允许 DashScope OSS 域名，防止 SSRF）
+const ALLOWED_PROXY_HOSTS = [
+  'dashscope-result-wlcb.oss-cn-wulanchabu.aliyuncs.com',
+  'dashscope.aliyuncs.com',
+  'cdn.ai-photo-cdn.pages.dev',
+  'ai-photo-cdn.pages.dev',
+]
+
 app.get('/api/proxy-image', async (req, res) => {
   try {
     const { url } = req.query
     if (!url || typeof url !== 'string') return res.status(400).json({ error: '缺少 url 参数' })
-    const resp = await fetch(url)
+    // 校验 URL 域名
+    let parsed
+    try { parsed = new URL(url) } catch { return res.status(400).json({ error: '无效 URL' }) }
+    if (!ALLOWED_PROXY_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
+      return res.status(403).json({ error: '不允许的域名' })
+    }
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) })
     if (!resp.ok) return res.status(resp.status).json({ error: `远程图片获取失败: ${resp.status}` })
     const buffer = Buffer.from(await resp.arrayBuffer())
     res.set('Content-Type', resp.headers.get('content-type') || 'image/jpeg')
@@ -255,12 +311,16 @@ app.post('/api/device/ack-shutdown', (req, res) => {
 })
 
 // 本地关机（浏览器调用本地服务器，写标志文件并退出进程）
+// 关机端点（仅允许本地请求或管理员密码）
 app.post('/api/device/local-shutdown', (req, res) => {
+  const isLocal = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip)
+  const hasAuth = req.headers['x-admin-password'] === ADMIN_PASSWORD
+  if (!isLocal && !hasAuth) {
+    return res.status(403).json({ error: '禁止访问' })
+  }
   console.log('[Shutdown] 收到远程关机指令，正在关闭...')
   res.json({ ok: true })
-  // 写标志文件，start.bat 检测到后不再重启
   writeFile(join(__dirname, '.shutdown'), new Date().toISOString()).catch(() => {})
-  // 延迟退出，让响应返回
   setTimeout(() => process.exit(0), 1000)
 })
 
@@ -307,10 +367,22 @@ app.put('/api/admin/devices/:deviceId/name', authMiddleware, (req, res) => {
 
 // 用户扫码登记
 app.post('/api/register', (req, res) => {
+  // 速率限制：每 IP 每分钟最多 5 次
+  if (!rateLimit(`register:${req.ip}`, 5)) {
+    return res.status(429).json({ error: '操作太频繁，请稍后再试' })
+  }
   const { name, className, phone } = req.body
   if (!name || !className) return res.status(400).json({ error: '姓名和班级必填' })
+  // 输入长度校验
+  if (name.length > 50 || className.length > 50 || (phone && phone.length > 20)) {
+    return res.status(400).json({ error: '输入内容过长' })
+  }
+  // 清理输入
+  const cleanName = String(name).trim().slice(0, 50)
+  const cleanClass = String(className).trim().slice(0, 50)
+  const cleanPhone = phone ? String(phone).trim().slice(0, 20) : ''
   const stmt = db.prepare('INSERT INTO registrations (name, class_name, phone) VALUES (?, ?, ?)')
-  const result = stmt.run(name, className, phone || '')
+  const result = stmt.run(cleanName, cleanClass, cleanPhone)
   res.json({ success: true, id: result.lastInsertRowid })
 })
 
@@ -418,6 +490,11 @@ app.delete('/api/admin/photos/:filename', authMiddleware, async (req, res) => {
   try {
     const filename = req.params.filename
     const filepath = join(uploadsDir, filename)
+    // 路径穿越检查
+    const resolved = resolve(filepath)
+    if (!resolved.startsWith(resolve(uploadsDir))) {
+      return res.status(403).json({ error: '禁止访问' })
+    }
     if (existsSync(filepath)) await unlink(filepath)
     res.json({ success: true })
   } catch { res.status(500).json({ error: '删除失败' }) }
