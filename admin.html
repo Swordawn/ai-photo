@@ -487,8 +487,8 @@ function loadPhotos(){
       return '<div class="photo-card">'+
       '<img src="'+imgUrl+'" alt="'+p.filename+'" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>%27\'">'+
       '<div class="photo-info"><h4>'+(p.name||'未知用户')+'</h4>'+
-      '<p>'+(p.class_name||'')+' · '+(p.style||'原版')+'</p>'+
-      '<p>'+p.created_at+'</p></div>'+
+      '<p>'+(p.class_name||'')+(p.phone?' · '+p.phone:'')+'</p>'+
+      '<p>'+(p.style||'原版')+' · '+p.created_at+'</p></div>'+
       '<div class="photo-actions"><button class="btn btn-sm btn-danger" onclick="deletePhoto(\''+p.filename+'\')">删除</button></div></div>'}).join('');
     renderPagination('photoPagination',r.total,r.page,r.limit,page=>{photoPage=page;loadPhotos()});
   });
