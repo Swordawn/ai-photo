@@ -2,148 +2,212 @@
 
 ## 项目概述
 
-面向河南应用技术职业学院的 AI 校园写真自助机。用户通过自助机拍照，选择相框和艺术风格，AI 生成写真，扫码下载。
+面向河南应用技术职业学院的 AI 校园写真自助机。用户扫码登记，自助机拍照，选择相框和艺术风格，AI 生成写真，扫码下载。
 
-**技术栈：** React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + Express 5 + Cloudflare Tunnel
+**技术栈：** React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + Express 5 + SQLite + Cloudflare Tunnel
 
-**启动：** `npm start`（同时启动 Express 后端 + Vite 前端 + Cloudflare 隧道）
+**启动：** `npm start`（Express 后端 + Vite 前端 + cloudflared 隧道）
+
+**部署地址：** `https://swordawn.cloud`（CF 隧道 HTTPS）
+
+---
 
 ## 页面流程
 
 ```
-首页 → 拍照（3秒倒计时） → 合成（选风格/相框） → 结果（下载/打印/扫码）
+首页（QR码/欢迎） → 拍照（选相框+3秒倒计时） → 合成（选风格/相框） → 结果（下载/打印/扫码）
 ```
 
 | 页面 | 组件 | 说明 |
 |------|------|------|
-| 首页 | `HomePage.tsx` | 深蓝主题，校园轮播背景，金色标题，三个按钮 |
-| 拍照 | `CameraPage.tsx` | 420×630 容器（2:3），摄像头预览+相框叠加，3秒倒计时，左侧相框选择 |
+| 首页 | `HomePage.tsx` | 深蓝主题，校园轮播（CDN），动态QR码，扫码登记后显示欢迎 |
+| 拍照 | `CameraPage.tsx` | 420×560 容器，摄像头预览+相框叠加，3秒倒计时，左侧相框选择 |
 | 合成 | `ComposePage.tsx` | 照片+相框预览，6种AI风格选择，相框更换 |
 | 结果 | `PrintPage.tsx` | 大图展示，下载/打印/二维码扫码，15秒倒计时返回 |
 
-## 关键尺寸
+---
 
-- 照片比例：**2:3**（对应 10.2cm × 15.2cm）
-- 容器：`height: calc(100vh - 100px)`, `aspectRatio: 2/3`, `borderRadius: 16`
-- 相框 PNG：1200×1800（2:3）
-- Canvas 合成输出：1200×1800 JPEG 95%
+## 核心流程
 
-## 相框系统
+### 扫码登记
+1. 首页显示动态 QR 码（指向 `当前域名/register`）
+2. 手机扫码 → 填写姓名/班级 → 提交到 SQLite
+3. 自助机轮询（5秒）检测到登记 → 显示"欢迎 XXX"
+4. 用户点"开始拍照" → 进入拍照页
+5. 90秒超时自动清除 / 用户点"跳过"清除
 
-4 款相框定义在 `src/data/frames.ts`：
-- `xiangkuang1.png` — 经典相框（2MB）
-- `xiangkuang2.png` — 花边相框（947KB）
-- `xiangkuang3` — 简约相框（SVG 内联）
-- `xiangkuang4` — 复古相框（SVG 内联）
+### AI 合成
+1. 拍照 → base64 JPEG
+2. 选择风格 + 相框
+3. 发送到 DashScope `wan2.7-image`（messages 格式）
+4. AI 结果 + 相框 → Canvas 合成（镜像处理）
+5. 自动保存到 `uploads/已完成照片/`
 
-**预览原理：** CSS 叠加（非合成），相框 PNG `object-fit:fill` 覆盖在照片上方
-**合成原理：** Canvas 先画照片（cover），再画相框（叠加），输出 base64
+### 镜像处理
+- 摄像头预览：CSS `scaleX(-1)`
+- 拍照/合成页：CSS `scaleX(-1)`
+- Canvas 合成：`ctx.scale(-1, 1)` 数据层镜像
+- 结果页：不加 CSS 镜像
 
-## AI 合成流程
+---
 
-1. `generateAIImage(capturedPhoto, styleId, mock)` → 调用 DashScope `wanx-style-repaint-v1`
-2. DashScope 返回图片 URL（OSS）
-3. `compositeFrame(aiResult, frameSrc)` → 通过 `/api/proxy-image` 代理获取图片，Canvas 合成+镜像
-4. `autoSaveImage(finalImage)` → POST 到 `/api/upload`，保存到 `uploads/已完成照片/`
-5. 返回合成后的 base64 + 服务器 URL（用于二维码）
+## 部署架构
 
-## 镜像处理
+```
+用户浏览器
+  ├── 页面 → swordawn.cloud（CF 隧道 → 服务器 3001）
+  ├── 背景图/相框 → ai-photo-cdn.pages.dev（CF CDN）
+  └── API → swordawn.cloud/api/*（CF 隧道 → 服务器）
+```
 
-- 摄像头预览：CSS `transform: scaleX(-1)`（镜像）
-- 拍照/合成页照片显示：CSS `scaleX(-1)`（与预览一致）
-- Canvas 合成：`ctx.scale(-1, 1)` 翻转照片数据
-- 结果页：不加 CSS 镜像（数据已是镜像的）
-- 下载的图片 = 镜像版（与用户看到的一致）
+**服务器：** 81.70.134.240 (Ubuntu, 2核2G4M)
+**CDN：** Cloudflare Pages `ai-photo-cdn.pages.dev`
+**隧道：** Cloudflare Named Tunnel `swordawn.cloud`
 
-## 后端 (server.js)
-
-### API 端点（13个）
-
-| 路径 | 用途 |
-|------|------|
-| `POST /api/upload` | 上传照片（base64 → 文件） |
-| `GET /api/proxy-image?url=` | 代理远程图片（解决 CORS） |
-| `GET /api/machine-status` | 前端读取机器状态 |
-| `POST /api/report-page` | 前端上报当前页面 |
-| `GET /api/health` | 健康检查 |
-| `GET /booth-admin` | 管理后台（内联 HTML） |
-| `GET /api/admin/status` | 管理员：系统状态 |
-| `GET/POST /api/admin/config` | 管理员：配置读写 |
-| `GET /api/admin/photos` | 管理员：照片列表 |
-| `DELETE /api/admin/photos/:name` | 管理员：删除照片 |
-| `DELETE /api/admin/photos` | 管理员：清空所有 |
-
-### 中间件
-
-- `apiGateMiddleware`：`apiLocked` 时拦截上传/代理/上报
-- `authMiddleware`：管理 API 需 `X-Admin-Password` header
-
-### Cloudflare 隧道
-
-- 二进制：项目根目录 `cloudflared.exe`（63MB）
-- 启动：`cloudflared tunnel run --token <TOKEN>`（静默，不输出到终端）
-- 固定域名：`booth.swordawn.cloud`
-- Token 在 `.env` 的 `CLOUDFLARE_TUNNEL_TOKEN` 中
+---
 
 ## 管理后台
 
-访问 `https://booth.swordawn.cloud/booth-admin`，密码 `888888`
+**地址：** `https://swordawn.cloud/booth-admin`
+**密码：** `710317`（.env 中 ADMIN_PASSWORD）
 
-三个 Tab：
-1. **系统配置**：Mock 模式、空闲超时、自助机暂停、API 保护锁
-2. **实时监控**：当前页面、今日拍照、已完成照片数、运行时间、隧道 URL
-3. **内容管理**：照片网格、单张下载/删除、批量清空
+功能：
+- 系统配置：Mock 模式、空闲超时、自助机暂停、API 保护锁
+- 实时监控：当前页面、今日拍照、已完成照片数、运行时间、隧道 URL
+- 内容管理：照片网格、单张下载/删除、批量清空
+- 设备管理：在线设备列表、远程关机
+- OTA 更新：检查更新、一键部署
+
+---
 
 ## 环境变量 (.env)
 
 ```
-VITE_DASHSCOPE_KEY=sk-xxx          # DashScope API Key
-ADMIN_PASSWORD=888888              # 管理后台密码
+VITE_DASHSCOPE_KEY=sk-xxx          # DashScope API Key（VITE_ 前缀嵌入前端）
+ADMIN_PASSWORD=710317              # 管理后台密码
 CLOUDFLARE_TUNNEL_TOKEN=eyJ...     # CF 命名隧道 Token
-PUBLIC_HOST=booth.swordawn.cloud   # 公网域名（二维码用）
+PUBLIC_HOST=swordawn.cloud         # 公网域名（二维码 URL 用）
 ```
+
+---
+
+## API 端点
+
+### 用户端
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/register` | 手机扫码登记 |
+| GET | `/api/registration/latest` | 自助机轮询最新登记 |
+| POST | `/api/registration/:id/use` | 标记登记已使用 |
+| POST | `/api/upload` | 上传照片（base64） |
+| GET | `/api/proxy-image?url=` | 代理远程图片（限 DashScope OSS） |
+| POST | `/api/report-page` | 前端上报当前页面 |
+| GET | `/api/machine-status` | 前端读取机器状态 |
+
+### 设备管理
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/device/heartbeat` | 设备心跳（30秒） |
+| POST | `/api/device/local-shutdown` | 本地关机（需本地IP或管理员密码） |
+
+### 管理员（需 X-Admin-Password header）
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/admin/status` | 系统状态 |
+| GET/POST | `/api/admin/config` | 配置读写 |
+| GET | `/api/admin/photos` | 照片列表 |
+| DELETE | `/api/admin/photos/:name` | 删除照片 |
+| DELETE | `/api/admin/photos` | 清空所有 |
+| GET | `/api/admin/devices` | 设备列表 |
+| POST | `/api/admin/devices/:id/shutdown` | 关闭设备 |
+| GET | `/api/admin/check-update` | 检查 OTA 更新 |
+| POST | `/api/admin/do-update` | 执行 OTA 更新 |
+
+### 其他
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/register` | 手机登记页面（HTML） |
+| GET | `/booth-admin` | 管理后台（HTML） |
+| ALL | `/dashscope/*` | DashScope API 代理 |
+| GET | `/api/health` | 健康检查 |
+
+---
 
 ## 目录结构
 
 ```
 ai-photo-booth/
 ├── src/
-│   ├── components/        # 页面组件
-│   │   ├── HomePage.tsx
-│   │   ├── CameraPage.tsx
-│   │   ├── ComposePage.tsx
-│   │   ├── PrintPage.tsx
-│   │   ├── AppHeader.tsx
-│   │   └── FloatingCatkins.tsx
+│   ├── components/
+│   │   ├── HomePage.tsx        # 首页（QR码+轮播+欢迎）
+│   │   ├── CameraPage.tsx      # 拍照页（摄像头+相框+倒计时）
+│   │   ├── ComposePage.tsx     # 合成页（风格+相框选择）
+│   │   ├── PrintPage.tsx       # 结果页（下载+打印+QR码）
+│   │   ├── AppHeader.tsx       # 通用头部
+│   │   └── FloatingCatkins.tsx # 装饰动画
 │   ├── data/
-│   │   ├── frames.ts      # 4款相框定义
-│   │   └── styles.ts      # 6种AI风格
-│   ├── state/
-│   │   └── useAppState.ts # 全局状态 + sessionStorage
-│   ├── utils/
-│   │   ├── compositeFrame.ts  # Canvas 合成
-│   │   ├── autoSave.ts        # 上传保存
-│   │   └── imageUpload.ts     # 第三方图床上传（备用）
+│   │   ├── frames.ts           # 4款相框（CDN URL）
+│   │   └── styles.ts           # 6种AI风格
 │   ├── api/
-│   │   └── generate.ts    # DashScope API 调用
-│   └── App.tsx            # 路由 + 合成逻辑
-├── server.js              # Express 后端（全部后端逻辑）
-├── cloudflared.exe        # CF 隧道二进制
-├── .env                   # 环境变量
-├── vite.config.ts         # Vite + 代理配置
-├── uploads/               # 上传照片目录
-│   └── 已完成照片/        # 合成完成的照片
-├── public/                # 静态资源
-└── docs/superpowers/plans/  # 实现计划文档
+│   │   ├── generate.ts         # DashScope wan2.7-image API
+│   │   └── apiBase.ts          # API 请求封装
+│   ├── state/
+│   │   └── useAppState.ts      # 全局状态 + sessionStorage
+│   ├── utils/
+│   │   ├── compositeFrame.ts   # Canvas 合成 + 镜像
+│   │   ├── autoSave.ts         # 自动保存
+│   │   └── imageUpload.ts      # 第三方图床（备用）
+│   └── App.tsx                 # 路由 + 登记轮询 + 合成逻辑
+├── server.js                   # Express 后端（全部后端逻辑）
+├── cloudflared.exe             # CF 隧道二进制（63MB）
+├── start.bat                   # Windows 启动脚本（自动重启）
+├── start.sh                    # Linux 启动脚本
+├── .env                        # 环境变量
+├── vite.config.ts              # Vite + 代理配置
+├── uploads/                    # 上传照片目录
+│   └── 已完成照片/              # 合成完成的照片
+├── ota.json                    # OTA 版本文件
+└── docs/superpowers/plans/     # 实现计划文档
 ```
+
+---
+
+## 安全措施
+
+- CORS 限制为 `PUBLIC_HOST` 域名
+- `/api/proxy-image` 限制为 DashScope OSS 域名白名单
+- `/api/device/local-shutdown` 仅允许本地 IP 或管理员密码
+- 管理员照片删除有路径穿越检查
+- 注册接口有速率限制（5次/分）和输入长度限制
+- 上传接口有图片格式验证（魔数检查）和大小限制（10MB）
+- JSON body 限制 10MB
+- 默认密码启动警告
+
+---
+
+## OTA 更新
+
+**机制：** 每 30 分钟检查 Gitee 仓库，SHA 对比，增量下载变更文件
+
+**发版流程：**
+1. 修改代码
+2. 更新 `ota.json` 和 `package.json` 的 version
+3. `git push` 到 Gitee
+4. 部署机器 30 分钟内自动更新 + 重启
+
+**手动触发：** 管理后台点"检查更新"
+
+---
 
 ## 已安装 Skills
 
-- `ui-ux-pro-max` — UI/UX 设计指南（67种风格、96调色板）
-- `frontend-patterns` — React 前端模式最佳实践
-- `superpowers` — Agent Team 开发流程（brainstorming、writing-plans、executing-plans 等）
+- `ui-ux-pro-max` — UI/UX 设计指南
+- `frontend-patterns` — React 前端模式
+- `superpowers` — Agent Team 开发流程
 
-## 待清理的死代码
+---
 
-以下组件文件已不再使用（历史遗留）：
+## 待清理
+
+以下组件文件为历史遗留，未被使用：
 `AttractScreen.tsx`, `CameraCapture.tsx`, `CollegeBranding.tsx`, `ConfirmPage.tsx`, `Logo.tsx`, `ParticleBackground.tsx`, `ProcessingPage.tsx`, `QRCodePage.tsx`, `RegisterPage.tsx`, `ResultPage.tsx`, `StepIndicator.tsx`, `StyleSelect.tsx`
