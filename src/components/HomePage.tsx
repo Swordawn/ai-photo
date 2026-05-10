@@ -68,10 +68,11 @@ export default function HomePage({ onStart, onCamera }: Props) {
             七十载匠心砺技展风采
           </h1>
           <p style={{
-            fontSize: 18,
+            fontSize: 22,
             color: 'rgba(255,255,255,0.85)',
             letterSpacing: '0.1em',
             marginTop: 8,
+            fontFamily: '"SimHei", "黑体", sans-serif',
           }}>
             —— 河南应用技术职业学院 · 人工智能与信息技术学院 ——
           </p>
@@ -146,12 +147,13 @@ export default function HomePage({ onStart, onCamera }: Props) {
 
           {/* 扫码文字 */}
           <p style={{
-            fontSize: 22,
+            fontSize: 24,
             color: 'white',
             fontWeight: 500,
             textShadow: '0 2px 8px rgba(0,0,0,0.5)',
             textAlign: 'center',
             margin: '0 0 24px',
+            fontFamily: '"SimHei", "黑体", sans-serif',
           }}>
             手机扫码 · 免费制作校园AI纪念照
           </p>
@@ -163,14 +165,15 @@ export default function HomePage({ onStart, onCamera }: Props) {
               onClick={onStart}
               style={{
                 borderRadius: 30,
-                padding: '14px 28px',
-                fontSize: 16, fontWeight: 500,
+                padding: '16px 32px',
+                fontSize: 18, fontWeight: 500,
                 border: '1.5px solid rgba(255,255,255,0.5)',
                 background: 'rgba(10,40,110,0.6)',
                 backdropFilter: 'blur(8px)',
                 color: 'white',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
+                fontFamily: '"SimHei", "黑体", sans-serif',
               }}
             >
               📋 信息登记
@@ -181,14 +184,15 @@ export default function HomePage({ onStart, onCamera }: Props) {
               onClick={onCamera}
               style={{
                 borderRadius: 30,
-                padding: '14px 28px',
-                fontSize: 16, fontWeight: 700,
+                padding: '16px 32px',
+                fontSize: 18, fontWeight: 700,
                 border: 'none',
                 background: 'linear-gradient(135deg, #C9A84C, #FFE566)',
                 color: '#0d2a6e',
                 cursor: 'pointer',
                 boxShadow: '0 4px 16px rgba(201,168,76,0.5)',
                 transition: 'all 0.2s',
+                fontFamily: '"SimHei", "黑体", sans-serif',
               }}
             >
               📷 立即拍摄
@@ -199,14 +203,15 @@ export default function HomePage({ onStart, onCamera }: Props) {
               onClick={onStart}
               style={{
                 borderRadius: 30,
-                padding: '14px 28px',
-                fontSize: 16, fontWeight: 500,
+                padding: '16px 32px',
+                fontSize: 18, fontWeight: 500,
                 border: '1.5px solid rgba(255,255,255,0.5)',
                 background: 'rgba(10,40,110,0.6)',
                 backdropFilter: 'blur(8px)',
                 color: 'white',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
+                fontFamily: '"SimHei", "黑体", sans-serif',
               }}
             >
               🖼 作品展示
@@ -223,19 +228,21 @@ export default function HomePage({ onStart, onCamera }: Props) {
         flexShrink: 0,
       }}>
         <h2 style={{
-          fontSize: 20,
+          fontSize: 22,
           fontWeight: 600,
           color: 'white',
           margin: '0 0 6px',
+          fontFamily: '"SimHei", "黑体", sans-serif',
         }}>
           React + Vite + AI | 智能写真系统
         </h2>
         <p style={{
-          fontSize: 12,
-          color: 'rgba(255,255,255,0.4)',
+          fontSize: 14,
+          color: 'rgba(255,255,255,0.5)',
           letterSpacing: 1,
+          fontFamily: '"SimHei", "黑体", sans-serif',
         }}>
-          七十载匠心砺技展风采 | 河南应用技术职业学院 · 人工智能与信息技术学院 实训成果展示
+          匠心砺技展风采 | 河南应用技术职业学院 · 人工智能与信息技术学院 2026年职业教育宣传周实训成果展示
         </p>
       </footer>
     </div>
