@@ -179,7 +179,7 @@ app.get('/api/proxy-image', async (req, res) => {
 })
 
 // DashScope API 代理（前端通过此端点调用 AI 接口，避免 CORS）
-app.all('/dashscope/*', async (req, res) => {
+app.all('/dashscope/{*path}', async (req, res) => {
   try {
     const targetUrl = `https://dashscope.aliyuncs.com${req.url.replace('/dashscope', '')}`
     const headers = { ...req.headers, host: 'dashscope.aliyuncs.com' }
