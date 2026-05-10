@@ -16,7 +16,7 @@ interface Props {
   onSelectFrame: (frameId: string) => void
 }
 
-export default function CameraPage({ onCapture, onBack: _, selectedFrame, onSelectFrame }: Props) {
+export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectFrame }: Props) {
   const webcamRef = useRef<Webcam>(null)
   const [isCameraReady, setIsCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
@@ -309,6 +309,15 @@ export default function CameraPage({ onCapture, onBack: _, selectedFrame, onSele
         borderLeft: '0.5px solid rgba(255,255,255,0.08)',
         display: 'flex', flexDirection: 'column', flexShrink: 0,
       }}>
+        {/* 返回按钮 */}
+        <button onClick={onBack} style={{
+          background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
+          fontSize: 13, cursor: 'pointer', padding: '12px 14px 0',
+          textAlign: 'left',
+        }}>
+          ← 返回首页
+        </button>
+
         {/* 相框选择 */}
         <div style={{ padding: 14 }}>
           <p style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.5)', marginBottom: 10 }}>
