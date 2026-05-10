@@ -32,3 +32,4 @@ uploads/
 *.zip
 debug.txt
 .shutdown
+data.db

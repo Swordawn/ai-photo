@@ -50,6 +50,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [apiLocked, setApiLocked] = useState(false)
   const [serverUrl, setServerUrl] = useState<string | null>(null)
+  const [registration, setRegistration] = useState<{ id: number; name: string; class_name: string } | null>(null)
   const prevPageRef = useRef(state.page)
 
   // 页面变化时上报
@@ -77,6 +78,25 @@ export default function App() {
     const timer = setInterval(checkStatus, 15000)
     return () => clearInterval(timer)
   }, [])
+
+  // 扫码登记轮询（首页时每5秒检查新登记）
+  useEffect(() => {
+    if (state.page !== 'home') return
+    const poll = () => {
+      fetch('/api/registration/latest')
+        .then(r => r.json())
+        .then(data => {
+          if (data.registration) {
+            setRegistration(data.registration)
+            goTo('camera')
+          }
+        })
+        .catch(() => {})
+    }
+    poll()
+    const timer = setInterval(poll, 5000)
+    return () => clearInterval(timer)
+  }, [state.page, goTo])
 
   // 设备心跳（每30秒上报，自动检测中心服务器地址）
   useEffect(() => {
@@ -143,13 +163,18 @@ export default function App() {
       const url = await autoSaveImage(finalImage)
       setServerUrl(url)
 
+      // 标记登记已使用
+      if (registration) {
+        fetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
+      }
+
       setResultImage(finalImage)
       setErrorMsg(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : '生成失败'
       setErrorMsg(message)
     }
-  }, [state.capturedPhoto, state.mockMode, state.selectedFrame, setSelectedStyle, setResultImage])
+  }, [state.capturedPhoto, state.mockMode, state.selectedFrame, setSelectedStyle, setResultImage, registration])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', backgroundColor: '#F7FAFC' }}>

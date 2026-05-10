@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
 import { spawn, execSync } from 'child_process'
 import { config } from 'dotenv'
+import Database from 'better-sqlite3'
 
 config()
 const __filename = fileURLToPath(import.meta.url)
@@ -54,6 +55,40 @@ if (!existsSync(uploadsDir)) {
   await mkdir(uploadsDir, { recursive: true })
 }
 app.use('/uploads', express.static(uploadsDir))
+
+// 生产环境：服务前端构建文件
+const distDir = join(__dirname, 'dist')
+if (existsSync(distDir)) {
+  app.use(express.static(distDir))
+}
+
+// SQLite 数据库
+const dbPath = join(__dirname, 'data.db')
+const db = new Database(dbPath)
+db.pragma('journal_mode = WAL')
+
+// 创建表
+db.exec(`
+  CREATE TABLE IF NOT EXISTS registrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    class_name TEXT NOT NULL,
+    phone TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    used INTEGER DEFAULT 0
+  )
+`)
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    style TEXT,
+    frame TEXT,
+    reg_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`)
 
 // ===== API 锁中间件 =====
 // 开启后拦截所有前端 API 调用（防止 API 被盗用/滥用）
@@ -239,6 +274,47 @@ app.put('/api/admin/devices/:deviceId/name', authMiddleware, (req, res) => {
   if (!devices.has(deviceId)) return res.status(404).json({ error: '设备不存在' })
   if (name) devices.get(deviceId).name = name
   res.json({ success: true })
+})
+
+// ===== 扫码登记 API =====
+
+// 用户扫码登记
+app.post('/api/register', (req, res) => {
+  const { name, className, phone } = req.body
+  if (!name || !className) return res.status(400).json({ error: '姓名和班级必填' })
+  const stmt = db.prepare('INSERT INTO registrations (name, class_name, phone) VALUES (?, ?, ?)')
+  const result = stmt.run(name, className, phone || '')
+  res.json({ success: true, id: result.lastInsertRowid })
+})
+
+// 获取最新登记（自助机轮询）
+app.get('/api/registration/latest', (req, res) => {
+  const row = db.prepare('SELECT * FROM registrations WHERE used = 0 ORDER BY id DESC LIMIT 1').get()
+  if (!row) return res.json({ registration: null })
+  res.json({ registration: row })
+})
+
+// 确认登记已使用
+app.post('/api/registration/:id/use', (req, res) => {
+  db.prepare('UPDATE registrations SET used = 1 WHERE id = ?').run(req.params.id)
+  res.json({ success: true })
+})
+
+// 管理员：获取所有登记
+app.get('/api/admin/registrations', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM registrations ORDER BY id DESC LIMIT 100').all()
+  res.json({ registrations: rows })
+})
+
+// 管理员：清空登记
+app.delete('/api/admin/registrations', authMiddleware, (req, res) => {
+  db.exec('DELETE FROM registrations')
+  res.json({ success: true })
+})
+
+// 登记页面（手机端访问）
+app.get('/register', (req, res) => {
+  res.send(getRegisterHTML())
 })
 
 // ===== 管理页面 =====
@@ -664,6 +740,66 @@ inp.select();
 </script></body></html>`
 }
 
+// ===== 登记页面 HTML =====
+function getRegisterHTML() {
+  return `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AI校园写真 - 信息登记</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',-apple-system,sans-serif;background:linear-gradient(135deg,#0d2a6e 0%,#1a3a7e 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:white;border-radius:20px;padding:36px 28px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+h1{font-size:22px;font-weight:700;color:#0d2a6e;text-align:center;margin-bottom:6px}
+p.sub{text-align:center;color:#666;font-size:13px;margin-bottom:28px}
+label{display:block;font-size:13px;font-weight:500;color:#333;margin-bottom:6px}
+input{width:100%;padding:14px 16px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;transition:.2s;margin-bottom:16px}
+input:focus{border-color:#1565C0;box-shadow:0 0 0 3px rgba(21,101,192,.1)}
+button{width:100%;padding:16px;background:linear-gradient(135deg,#C9A84C,#FFE566);color:#0d2a6e;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;transition:.2s}
+button:active{transform:scale(.98)}
+.msg{text-align:center;padding:12px;border-radius:10px;margin-bottom:16px;font-size:13px;display:none}
+.msg.ok{display:block;background:#e8f5e9;color:#2e7d32}
+.msg.err{display:block;background:#ffebee;color:#c62828}
+.done{text-align:center;padding:40px 20px}
+.done h2{font-size:20px;color:#0d2a6e;margin-bottom:8px}
+.done p{color:#666;font-size:14px}
+</style></head><body>
+<div class="card" id="formCard">
+<h1>AI校园写真</h1>
+<p class="sub">请填写信息完成登记</p>
+<div class="msg" id="msg"></div>
+<form id="regForm">
+<label>姓名 *</label>
+<input type="text" id="name" placeholder="请输入姓名" required>
+<label>班级 *</label>
+<input type="text" id="className" placeholder="请输入班级" required>
+<label>手机号（选填）</label>
+<input type="tel" id="phone" placeholder="用于接收照片">
+<button type="submit">提交登记</button>
+</form>
+</div>
+<div class="card done" id="doneCard" style="display:none">
+<h2>✅ 登记成功！</h2>
+<p>请前往自助机拍照</p>
+</div>
+<script>
+document.getElementById('regForm').onsubmit=function(e){
+e.preventDefault();
+var name=document.getElementById('name').value.trim();
+var className=document.getElementById('className').value.trim();
+var phone=document.getElementById('phone').value.trim();
+if(!name||!className){showMsg('请填写姓名和班级','err');return}
+fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,className:className,phone:phone})})
+.then(function(r){return r.json()})
+.then(function(d){
+if(d.success){document.getElementById('formCard').style.display='none';document.getElementById('doneCard').style.display='block'}
+else{showMsg(d.error||'提交失败','err')}
+})
+.catch(function(){showMsg('网络错误','err')})
+};
+function showMsg(t,c){var m=document.getElementById('msg');m.textContent=t;m.className='msg '+c}
+</script></body></html>`
+}
+
 // ===== Cloudflare Tunnel（命名隧道，固定域名）=====
 const CLOUDFLARED_BIN = join(__dirname, 'cloudflared.exe')
 const TUNNEL_TOKEN = process.env.CLOUDFLARE_TUNNEL_TOKEN || ''
@@ -844,6 +980,14 @@ function startTunnel() {
     console.error('cloudflared spawn 失败:', err.message)
     setTimeout(startTunnel, 5000)
   }
+}
+
+// SPA 路由回退（生产环境）
+if (existsSync(distDir)) {
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path.startsWith('/booth-admin')) return res.status(404).end()
+    res.sendFile(join(distDir, 'index.html'))
+  })
 }
 
 // ===== 优雅退出 =====
