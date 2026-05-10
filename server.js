@@ -587,24 +587,71 @@ else{api('/api/admin/config','POST',{apiLocked:false}).then(()=>{loadConfig();to
 function updateTimeout(v){document.getElementById('timeoutV').textContent=v+'秒';clearTimeout(window._tt);window._tt=setTimeout(()=>api('/api/admin/config','POST',{idleTimeout:parseInt(v)}),500)}
 function copyTunnel(){const url=document.getElementById('sTunnel').textContent;if(url==='-')return;navigator.clipboard.writeText(url).then(()=>toast('已复制'))}
 function loadPhotos(){api('/api/admin/photos').then(r=>{
-const photos=r.photos||[];
-const grid=document.getElementById('photoGrid');
-const empty=document.getElementById('emptyState');
+var photos=r.photos||[];
+var grid=document.getElementById('photoGrid');
+var empty=document.getElementById('emptyState');
 if(photos.length===0){grid.innerHTML='';empty.style.display='block';return}
 empty.style.display='none';
-grid.innerHTML=photos.map(p=>'<div class="photo-item" onclick="dl(\\''+esc(p)+'\\')"><img src="/uploads/'+encodeURIComponent(p)+'" loading="lazy"><span class="photo-name">'+esc(p.split('/').pop())+'</span><div class="photo-overlay"><div class="photo-btns"><button class="dl" onclick="event.stopPropagation();dl(\\''+esc(p)+'\\')">下载</button><button class="rm" onclick="event.stopPropagation();rm(\\''+esc(p)+'\\')">删除</button></div></div></div>').join('')})}
-function esc(s){return s.replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'")}
+grid.innerHTML=photos.map(function(p){return '<div class="photo-item" data-name="'+encodeURIComponent(p)+'"><img src="/uploads/'+encodeURIComponent(p)+'" loading="lazy"><span class="photo-name">'+p.split('/').pop()+'</span><div class="photo-overlay"><div class="photo-btns"><button class="dl" data-action="dl">下载</button><button class="rm" data-action="rm">删除</button></div></div></div>'}).join('')})}
 function dl(n){window.open('/uploads/'+encodeURIComponent(n))}
-function rm(n){showModal('确认删除','确定删除此照片？',[{text:'取消',cls:'cancel'},{text:'删除',cls:'confirm'}]).then(i=>{if(i===1)api('/api/admin/photos/'+encodeURIComponent(n),'DELETE').then(()=>{loadPhotos();toast('已删除')})})}
+document.addEventListener('DOMContentLoaded',function(){
+var grid=document.getElementById('photoGrid');
+if(grid){
+grid.addEventListener('click',function(e){
+var btn=e.target.closest('[data-action]');
+var card=e.target.closest('.photo-item');
+if(!card)return;
+var name=decodeURIComponent(card.dataset.name);
+if(btn){
+var action=btn.dataset.action;
+e.stopPropagation();
+if(action==='dl'){dl(name)}
+if(action==='rm'){showModal('确认删除','确定删除此照片？',[{text:'取消',cls:'cancel'},{text:'删除',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/photos/'+encodeURIComponent(name),'DELETE').then(function(){loadPhotos();toast('已删除')})}})}
+} else {dl(name)}
+});
+}
+});
 function confirmClearAll(){showModal('确认清空','确定清空所有照片？此操作不可恢复！',[{text:'取消',cls:'cancel'},{text:'清空全部',cls:'confirm'}]).then(i=>{if(i===1)api('/api/admin/photos','DELETE').then(()=>{loadPhotos();toast('已清空')})})}
 function loadVersion(){api('/api/admin/ota-status').then(r=>{document.getElementById('versionTag').textContent='v'+r.localVersion})}
 function checkUpdate(){toast('正在检查...');api('/api/admin/check-update').then(r=>{if(r.hasUpdate){showModal('发现新版本','当前: v'+r.localVersion+' → 最新: v'+r.remoteVersion,[{text:'稍后',cls:'cancel'},{text:'立即更新',cls:'confirm primary'}]).then(i=>{if(i===1){api('/api/admin/do-update','POST').then(()=>{toast('更新中，请等待重启...')})}})}else{toast('已是最新版本 v'+r.localVersion)}}).catch(()=>{toast('检查失败')})}
-function loadDevices(){api('/api/admin/devices').then(r=>{var devices=r.devices||[];var onlineCount=devices.filter(function(d){return d.online}).length;document.getElementById('sDevices').textContent=onlineCount;var grid=document.getElementById('deviceGrid');var empty=document.getElementById('emptyDevices');if(devices.length===0){grid.innerHTML='';empty.style.display='block';return}empty.style.display='none';grid.innerHTML=devices.map(function(d){var ago=Math.floor((Date.now()-d.lastSeen)/1000);var timeText=ago<60?ago+'秒前':ago<3600?Math.floor(ago/60)+'分钟前':Math.floor(ago/3600)+'小时前';return '<div class="device-card" id="dev-'+d.id+'"><div class="device-row"><span class="device-name" ondblclick="renameDevice(\''+escDevice(d.id)+'\',this)">'+escDevice(d.name)+'</span><span class="device-status"><span class="device-dot '+(d.online?'on':'off')+'"></span>'+(d.online?'在线':'离线')+'</span></div><div class="device-id">ID: '+escDevice(d.id)+'</div><div class="device-page">当前页面: '+escDevice(d.page)+'</div><div class="device-meta"><span class="device-info">v'+escDevice(d.version)+' · '+timeText+'</span><button class="btn-shutdown" onclick="confirmShutdown(\''+escDevice(d.id)+'\')">关机</button></div></div>'}).join('')})}
-function escDevice(s){if(!s)return'';return String(s).replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'")}
-function confirmShutdown(deviceId){showModal('确认关机','确定向设备 '+deviceId+' 发送关机命令？',[{text:'取消',cls:'cancel'},{text:'确认关机',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/devices/'+encodeURIComponent(deviceId)+'/shutdown','POST').then(function(){loadDevices();toast('已发送关机命令')})}})}
+function loadDevices(){api('/api/admin/devices').then(r=>{var devices=r.devices||[];var onlineCount=devices.filter(function(d){return d.online}).length;document.getElementById('sDevices').textContent=onlineCount;var grid=document.getElementById('deviceGrid');var empty=document.getElementById('emptyDevices');if(devices.length===0){grid.innerHTML='';empty.style.display='block';return}empty.style.display='none';grid.innerHTML=devices.map(function(d){var ago=Math.floor((Date.now()-d.lastSeen)/1000);var timeText=ago<60?ago+'秒前':ago<3600?Math.floor(ago/60)+'分钟前':Math.floor(ago/3600)+'小时前';return '<div class="device-card" data-id="'+encodeURIComponent(d.id)+'"><div class="device-row"><span class="device-name" data-action="rename">'+escHtml(d.name)+'</span><span class="device-status"><span class="device-dot '+(d.online?'on':'off')+'"></span>'+(d.online?'在线':'离线')+'</span></div><div class="device-id">ID: '+escHtml(d.id)+'</div><div class="device-page">当前页面: '+escHtml(d.page)+'</div><div class="device-meta"><span class="device-info">v'+escHtml(d.version)+' · '+timeText+'</span><button class="btn-shutdown" data-action="shutdown">关机</button></div></div>'}).join('')})}
+function escHtml(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function confirmShutdownAll(){api('/api/admin/devices').then(function(r){var devices=r.devices||[];if(devices.length===0){toast('无在线设备');return}showModal('全部关机','确定向所有 '+devices.length+' 台设备发送关机命令？此操作不可撤销！',[{text:'取消',cls:'cancel'},{text:'确认全部关机',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/devices/shutdown-all','POST').then(function(r2){loadDevices();toast('已向 '+r2.count+' 台设备发送关机命令')})}})})}
-function renameDevice(deviceId,el){var oldName=el.textContent;el.outerHTML='<input class="device-name-input" value="'+oldName+'" id="rn-'+deviceId+'" onblur="saveRename(\''+escDevice(deviceId)+'\',this)" onkeydown="if(event.key===\\'Enter\\')this.blur()">';var inp=document.getElementById('rn-'+deviceId);inp.focus();inp.select()}
-function saveRename(deviceId,inp){var newName=inp.value.trim();if(!newName){newName=deviceId}api('/api/admin/devices/'+encodeURIComponent(deviceId)+'/name','PUT',{name:newName}).then(function(){loadDevices();toast('设备已重命名')})}
+document.addEventListener('DOMContentLoaded',function(){
+var grid=document.getElementById('deviceGrid');
+if(grid){
+grid.addEventListener('click',function(e){
+var btn=e.target.closest('[data-action]');
+if(!btn)return;
+var card=btn.closest('.device-card');
+if(!card)return;
+var id=decodeURIComponent(card.dataset.id);
+var action=btn.dataset.action;
+if(action==='shutdown'){
+showModal('确认关机','确定向设备 '+id+' 发送关机命令？',[{text:'取消',cls:'cancel'},{text:'确认关机',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/devices/'+encodeURIComponent(id)+'/shutdown','POST').then(function(){loadDevices();toast('已发送关机命令')})}});
+}
+});
+grid.addEventListener('dblclick',function(e){
+var nameEl=e.target.closest('[data-action="rename"]');
+if(!nameEl)return;
+var card=nameEl.closest('.device-card');
+if(!card)return;
+var id=decodeURIComponent(card.dataset.id);
+var oldName=nameEl.textContent;
+var inp=document.createElement('input');
+inp.className='device-name-input';
+inp.value=oldName;
+inp.onblur=function(){
+var newName=inp.value.trim()||id;
+api('/api/admin/devices/'+encodeURIComponent(id)+'/name','PUT',{name:newName}).then(function(){loadDevices();toast('设备已重命名')});
+};
+inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur()};
+nameEl.replaceWith(inp);
+inp.focus();
+inp.select();
+});
+}
+});
 </script></body></html>`
 }
 
