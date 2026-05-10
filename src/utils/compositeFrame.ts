@@ -1,3 +1,5 @@
+import { apiFetch } from '../apiBase'
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -8,14 +10,13 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-// DashScope URL 需要通过本地代理获取以避免 CORS 污染 canvas
+// DashScope URL 需要通过服务器代理获取以避免 CORS 污染 canvas
 async function loadRemoteImage(url: string): Promise<HTMLImageElement> {
   if (url.startsWith('data:') || url.startsWith('blob:')) {
     return loadImage(url)
   }
-  // 通过本地服务器代理获取远程图片（走 Vite proxy 或直接请求 Express）
   const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`
-  const resp = await fetch(proxyUrl)
+  const resp = await apiFetch(proxyUrl)
   if (!resp.ok) throw new Error(`代理图片失败 HTTP ${resp.status}`)
   const blob = await resp.blob()
   const blobUrl = URL.createObjectURL(blob)

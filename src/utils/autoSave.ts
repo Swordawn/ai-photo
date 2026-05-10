@@ -1,3 +1,5 @@
+import { apiFetch } from '../apiBase'
+
 /**
  * 上传照片到服务器，返回可访问的 URL
  */
@@ -6,7 +8,7 @@ export async function autoSaveImage(base64Image: string): Promise<string | null>
     const timestamp = Date.now()
     const filename = `已完成照片/photo_${timestamp}.jpg`
 
-    const resp = await fetch('/api/upload', {
+    const resp = await apiFetch('/api/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image: base64Image, filename }),

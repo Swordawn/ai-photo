@@ -1,5 +1,6 @@
+import { apiFetch } from '../apiBase'
+
 const API_KEY = import.meta.env.VITE_DASHSCOPE_KEY as string
-// 通过 Vite 代理避免 CORS
 const SUBMIT_URL = '/dashscope/api/v1/services/aigc/image-generation/generation'
 const TASK_URL = '/dashscope/api/v1/tasks'
 const POLL_INTERVAL = 3000
@@ -57,7 +58,7 @@ export async function generateAIImage(
 
   let submitRes: Response
   try {
-    submitRes = await fetch(SUBMIT_URL, {
+    submitRes = await apiFetch(SUBMIT_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${API_KEY}`,
@@ -102,7 +103,7 @@ export async function generateAIImage(
 
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
-    const pollRes = await fetch(`${TASK_URL}/${taskId}`, {
+    const pollRes = await apiFetch(`${TASK_URL}/${taskId}`, {
       headers: { 'Authorization': `Bearer ${API_KEY}` },
       signal,
     })

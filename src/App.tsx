@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useAppState } from './state/useAppState'
 import { generateAIImage } from './api/generate'
 import { compositeFrame } from './utils/compositeFrame'
+import { apiFetch } from './apiBase'
 import { autoSaveImage } from './utils/autoSave'
 import { getFrameSrc } from './data/frames'
 
@@ -29,7 +30,7 @@ function getDeviceId() {
 
 // 上报当前页面到后端
 function reportPage(page: string) {
-  fetch('/api/report-page', {
+  apiFetch('/api/report-page', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ page }),
@@ -64,7 +65,7 @@ export default function App() {
   // 启动时检查机器状态 + 定期刷新
   useEffect(() => {
     const checkStatus = () => {
-      fetch('/api/machine-status')
+      apiFetch('/api/machine-status')
         .then(r => r.json())
         .then(data => {
           setApiLocked(data.apiLocked || false)
@@ -83,7 +84,7 @@ export default function App() {
   useEffect(() => {
     if (state.page !== 'home') return
     const poll = () => {
-      fetch('/api/registration/latest')
+      apiFetch('/api/registration/latest')
         .then(r => r.json())
         .then(data => {
           if (data.registration) {
@@ -98,13 +99,10 @@ export default function App() {
     return () => clearInterval(timer)
   }, [state.page, goTo])
 
-  // 设备心跳（每30秒上报，自动检测中心服务器地址）
+  // 设备心跳（每30秒上报）
   useEffect(() => {
     const sendHeartbeat = () => {
-      // 自动检测：如果在本地开发就用相对路径，否则用当前域名
-      const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname)
-      const apiBase = isLocal ? '' : `${window.location.protocol}//${window.location.host}`
-      fetch(`${apiBase}/api/device/heartbeat`, {
+      apiFetch('/api/device/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId: getDeviceId(), page: state.page, version: '1.0.3' }),
@@ -114,14 +112,12 @@ export default function App() {
           if (data.commands && data.commands.length > 0) {
             for (const cmd of data.commands) {
               if (cmd.type === 'shutdown') {
-                // 通知中心服务器已收到命令
-                fetch(`${apiBase}/api/device/ack-shutdown`, {
+                apiFetch('/api/device/ack-shutdown', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ deviceId: getDeviceId() }),
                 }).catch(() => {})
-                // 通知本地服务器关闭（写标志文件 + exit）
-                fetch('/api/device/local-shutdown', {
+                apiFetch('/api/device/local-shutdown', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                 }).catch(() => {})
@@ -165,7 +161,7 @@ export default function App() {
 
       // 标记登记已使用
       if (registration) {
-        fetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
+        apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
       }
 
       setResultImage(finalImage)

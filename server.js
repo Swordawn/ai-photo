@@ -178,6 +178,31 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 })
 
+// DashScope API 代理（前端通过此端点调用 AI 接口，避免 CORS）
+app.all('/dashscope/*', async (req, res) => {
+  try {
+    const targetUrl = `https://dashscope.aliyuncs.com${req.url.replace('/dashscope', '')}`
+    const headers = { ...req.headers, host: 'dashscope.aliyuncs.com' }
+    delete headers['origin']
+    delete headers['referer']
+    const fetchOptions: RequestInit = {
+      method: req.method,
+      headers,
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      fetchOptions.body = JSON.stringify(req.body)
+    }
+    const resp = await fetch(targetUrl, fetchOptions)
+    const data = await resp.text()
+    res.status(resp.status)
+    res.set('Content-Type', resp.headers.get('content-type') || 'application/json')
+    res.send(data)
+  } catch (err) {
+    console.error('DashScope 代理失败:', err)
+    res.status(500).json({ error: 'DashScope 代理失败' })
+  }
+})
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
