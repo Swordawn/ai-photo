@@ -78,25 +78,27 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // 设备心跳（每30秒上报，接收命令）
+  // 设备心跳（每30秒通过CF隧道上报到中心服务器，接收命令）
   useEffect(() => {
+    const publicHost = import.meta.env.VITE_PUBLIC_HOST
+    const apiBase = publicHost ? `https://${publicHost}` : ''
     const sendHeartbeat = () => {
-      fetch('/api/device/heartbeat', {
+      fetch(`${apiBase}/api/device/heartbeat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: getDeviceId(), page: state.page, version: '1.0.0' }),
+        body: JSON.stringify({ deviceId: getDeviceId(), page: state.page, version: '1.0.3' }),
       })
         .then(r => r.json())
         .then(data => {
           if (data.commands && data.commands.length > 0) {
             for (const cmd of data.commands) {
               if (cmd.type === 'shutdown') {
-                fetch('/api/device/ack-shutdown', {
+                fetch(`${apiBase}/api/device/ack-shutdown`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ deviceId: getDeviceId() }),
                 }).catch(() => {})
-                window.close()
+                setTimeout(() => window.close(), 500)
                 return
               }
             }
