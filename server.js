@@ -182,15 +182,24 @@ app.post('/api/device/heartbeat', (req, res) => {
   res.json({ commands })
 })
 
-// 设备确认关机
+// 设备确认关机（记录状态）
 app.post('/api/device/ack-shutdown', (req, res) => {
   const { deviceId } = req.body
-  console.log(`[Device] 设备 ${deviceId} 已确认关机`)
   if (deviceId) {
     const dev = devices.get(deviceId)
     if (dev) dev.page = 'shutdown'
   }
   res.json({ ok: true })
+})
+
+// 本地关机（浏览器调用本地服务器，写标志文件并退出进程）
+app.post('/api/device/local-shutdown', (req, res) => {
+  console.log('[Shutdown] 收到远程关机指令，正在关闭...')
+  res.json({ ok: true })
+  // 写标志文件，start.bat 检测到后不再重启
+  writeFile(join(__dirname, '.shutdown'), new Date().toISOString()).catch(() => {})
+  // 延迟退出，让响应返回
+  setTimeout(() => process.exit(0), 1000)
 })
 
 // 管理员：获取所有设备列表

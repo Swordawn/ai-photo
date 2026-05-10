@@ -94,12 +94,17 @@ export default function App() {
           if (data.commands && data.commands.length > 0) {
             for (const cmd of data.commands) {
               if (cmd.type === 'shutdown') {
+                // 通知中心服务器已收到命令
                 fetch(`${apiBase}/api/device/ack-shutdown`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ deviceId: getDeviceId() }),
                 }).catch(() => {})
-                setTimeout(() => window.close(), 500)
+                // 通知本地服务器关闭（写标志文件 + exit）
+                fetch('/api/device/local-shutdown', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                }).catch(() => {})
                 return
               }
             }

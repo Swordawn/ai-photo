@@ -31,3 +31,4 @@ uploads/
 *.msi
 *.zip
 debug.txt
+.shutdown
