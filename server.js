@@ -207,6 +207,7 @@ app.get('/download/:filename', (req, res) => {
 // 代理图片（仅允许 DashScope OSS 域名，防止 SSRF）
 const ALLOWED_PROXY_HOSTS = [
   'dashscope-result-wlcb.oss-cn-wulanchabu.aliyuncs.com',
+  'dashscope-7c2c.oss-accelerate.aliyuncs.com',
   'dashscope.aliyuncs.com',
   'cdn.ai-photo-cdn.pages.dev',
   'ai-photo-cdn.pages.dev',
