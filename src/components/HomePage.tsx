@@ -24,17 +24,36 @@ interface Props {
   onStart: () => void
   onCamera: () => void
   registration: Registration | null
+  onClearRegistration: () => void
 }
 
-export default function HomePage({ onStart: _, onCamera, registration }: Props) {
+export default function HomePage({ onStart: _, onCamera, registration, onClearRegistration }: Props) {
   const [currentBg, setCurrentBg] = useState(0)
+  const [countdown, setCountdown] = useState(90)
 
+  // 背景轮播
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentBg(prev => (prev + 1) % BG_IMAGES.length)
     }, 3000)
     return () => clearInterval(timer)
   }, [])
+
+  // 登记倒计时
+  useEffect(() => {
+    if (!registration) { setCountdown(90); return }
+    setCountdown(90)
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          onClearRegistration()
+          return 90
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [registration, onClearRegistration])
 
   // 动态 QR 码 URL
   const qrUrl = `${window.location.protocol}//${window.location.host}/register`
@@ -194,7 +213,7 @@ export default function HomePage({ onStart: _, onCamera, registration }: Props) 
               }}>
                 {registration.name}
               </h2>
-              <p style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>
+              <p style={{ fontSize: 14, color: '#666', marginBottom: 16 }}>
                 {registration.class_name}
               </p>
               <button
@@ -209,10 +228,29 @@ export default function HomePage({ onStart: _, onCamera, registration }: Props) 
                   cursor: 'pointer',
                   boxShadow: '0 4px 16px rgba(201,168,76,0.5)',
                   fontFamily: '"SimHei", "黑体", sans-serif',
+                  display: 'block',
+                  margin: '0 auto 12px',
                 }}
               >
                 📷 开始拍照
               </button>
+
+              {/* 跳过按钮 + 倒计时 */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <button
+                  onClick={onClearRegistration}
+                  style={{
+                    background: 'none', border: 'none',
+                    color: '#999', fontSize: 12, cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  跳过
+                </button>
+                <span style={{ fontSize: 11, color: '#bbb' }}>
+                  {countdown}秒后自动清除
+                </span>
+              </div>
             </div>
           )}
         </div>

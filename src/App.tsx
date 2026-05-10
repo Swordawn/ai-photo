@@ -80,6 +80,11 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
+  // 清除登记
+  const clearRegistration = useCallback(() => {
+    setRegistration(null)
+  }, [])
+
   // 扫码登记轮询（首页时每5秒检查新登记）
   useEffect(() => {
     if (state.page !== 'home') return
@@ -97,6 +102,15 @@ export default function App() {
     const timer = setInterval(poll, 5000)
     return () => clearInterval(timer)
   }, [state.page])
+
+  // 登记超时：90秒无操作自动清除
+  useEffect(() => {
+    if (!registration) return
+    const timeout = setTimeout(() => {
+      setRegistration(null)
+    }, 90000)
+    return () => clearTimeout(timeout)
+  }, [registration])
 
   // 设备心跳（每30秒上报）
   useEffect(() => {
@@ -197,6 +211,7 @@ export default function App() {
             onStart={() => goTo('camera')}
             onCamera={() => goTo('camera')}
             registration={registration}
+            onClearRegistration={clearRegistration}
           />
         )}
 
