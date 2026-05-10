@@ -4,7 +4,7 @@ import compression from 'compression'
 import { writeFile, mkdir, readdir, unlink, readFile, rm } from 'fs/promises'
 import { join, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import os from 'os'
 import { spawn, execSync } from 'child_process'
 import { config } from 'dotenv'
@@ -851,8 +851,9 @@ app.post('/api/admin/params', authMiddleware, (req, res) => {
 function getAdminHTML() {
   // 读取外部HTML文件
   try {
-    return readFile(join(__dirname, 'admin.html'), 'utf-8')
-  } catch {
+    return readFileSync(join(__dirname, 'admin.html'), 'utf-8')
+  } catch (err) {
+    console.error('加载管理后台HTML失败:', err)
     return '<h1>管理后台加载失败</h1>'
   }
 }
