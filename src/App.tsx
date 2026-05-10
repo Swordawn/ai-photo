@@ -194,9 +194,11 @@ export default function App() {
         })
       }).catch(() => {})
 
+      // 生成下载页面URL（微信扫码可直接下载）
+      const downloadUrl = `/download?url=${encodeURIComponent(finalImage)}&frame=${state.selectedFrame || 'frame1'}`
       console.log('[handleGenerate] 跳转到结果页')
       setResultImage(finalImage)
-      setServerUrl(finalImage)
+      setServerUrl(downloadUrl)
       setErrorMsg(null)
 
       // 标记登记已使用

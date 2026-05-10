@@ -434,6 +434,11 @@ app.get('/register', (req, res) => {
   res.send(getRegisterHTML())
 })
 
+// 下载页面（手机端扫码下载带边框的照片）
+app.get('/download', (req, res) => {
+  res.send(getDownloadHTML())
+})
+
 // ===== 管理页面 =====
 app.get('/booth-admin', (req, res) => {
   res.send(getAdminHTML())
@@ -922,6 +927,105 @@ else{showMsg(d.error||'提交失败','err')}
 function showMsg(t,c){var m=document.getElementById('msg');m.textContent=t;m.className='msg '+c}
 var cdTimer=null;
 function startCountdown(){var sec=90;var el=document.getElementById('cdNum');var msg=document.getElementById('doneMsg');var expired=document.getElementById('expiredMsg');cdTimer=setInterval(function(){sec--;if(el)el.textContent=sec;if(sec<=0){clearInterval(cdTimer);if(msg)msg.style.display='none';if(expired)expired.style.display='block'}},1000)}
+</script></body></html>`
+}
+
+// ===== 下载页面 HTML =====
+function getDownloadHTML() {
+  return `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AI校园写真 - 下载</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',-apple-system,sans-serif;background:#f5f5f5;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+.card{background:white;border-radius:16px;padding:20px;max-width:400px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center}
+.preview{position:relative;width:100%;aspect-ratio:2/3;border-radius:12px;overflow:hidden;margin-bottom:16px}
+.preview img{width:100%;height:100%;object-fit:cover}
+.frame{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
+h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
+.btn{width:100%;padding:14px;background:linear-gradient(135deg,#C9A84C,#FFE566);color:#0d2a6e;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:12px}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.tip{font-size:12px;color:#999;margin-top:8px}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px}
+.spinner{width:40px;height:40px;border:3px solid #eee;border-top-color:#1565C0;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body>
+<div class="card" id="mainCard">
+<div class="loading" id="loading">
+<div class="spinner"></div>
+<p style="color:#666;font-size:14px">正在加载图片...</p>
+</div>
+<div id="content" style="display:none">
+<h1>AI校园写真</h1>
+<div class="preview">
+<img id="photo" src="" alt="照片">
+<img id="frame" class="frame" src="/frames/xiangkuang1.png" alt="相框" style="display:none">
+</div>
+<button class="btn" id="downloadBtn" onclick="download()">保存到相册</button>
+<p class="tip">长按图片也可保存</p>
+</div>
+</div>
+<script>
+var params=new URLSearchParams(window.location.search);
+var photoUrl=params.get('url');
+var frameId=params.get('frame')||'frame1';
+var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png'};
+var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
+
+if(!photoUrl){
+document.getElementById('loading').innerHTML='<p style="color:red">缺少图片参数</p>';
+}else{
+var photo=document.getElementById('photo');
+var frame=document.getElementById('frame');
+photo.src=photoUrl;
+frame.src=frameSrc;
+frame.style.display='block';
+
+var loaded=0;
+function checkReady(){loaded++;if(loaded>=2){document.getElementById('loading').style.display='none';document.getElementById('content').style.display='block'}}
+photo.onload=checkReady;
+photo.onerror=function(){document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>'};
+frame.onload=checkReady;
+frame.onerror=function(){frame.style.display='none';checkReady()};
+}
+
+function download(){
+var btn=document.getElementById('downloadBtn');
+btn.disabled=true;
+btn.textContent='正在生成...';
+
+try{
+var c=document.createElement('canvas');
+var fw=frame.naturalWidth||1016;
+var fh=frame.naturalHeight||1524;
+c.width=fw;c.height=fh;
+var ctx=c.getContext('2d');
+
+var pw=photo.naturalWidth||photo.width;
+var ph=photo.naturalHeight||photo.height;
+var fa=fw/fh;
+var pa=pw/ph;
+var sx=0,sy=0,sw=pw,sh=ph;
+if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
+ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
+ctx.drawImage(frame,0,0,fw,fh);
+
+var dataUrl=c.toDataURL('image/jpeg',0.95);
+var a=document.createElement('a');
+a.href=dataUrl;
+a.download='AI校园写真_'+Date.now()+'.jpg';
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+btn.textContent='保存成功！';
+setTimeout(function(){btn.textContent='保存到相册';btn.disabled=false},2000);
+}catch(e){
+console.error(e);
+btn.textContent='保存失败，请长按图片保存';
+btn.disabled=false;
+}
+}
 </script></body></html>`
 }
 
