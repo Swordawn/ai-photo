@@ -4,12 +4,12 @@ const collegeLogo = new URL('../assets/college-logo.png', import.meta.url).href
 const registerQR = new URL('../assets/register-qr .png', import.meta.url).href
 
 const BG_IMAGES = [
-  new URL('../assets/backgrounds/bg (1).jpg', import.meta.url).href,
-  new URL('../assets/backgrounds/bg (2).jpg', import.meta.url).href,
-  new URL('../assets/backgrounds/bg (3).jpg', import.meta.url).href,
-  new URL('../assets/backgrounds/bg (4).jpg', import.meta.url).href,
-  new URL('../assets/backgrounds/bg (5).jpg', import.meta.url).href,
-  new URL('../assets/backgrounds/bg (6).jpg', import.meta.url).href,
+  new URL('../assets/backgrounds/bg (1).webp', import.meta.url).href,
+  new URL('../assets/backgrounds/bg (2).webp', import.meta.url).href,
+  new URL('../assets/backgrounds/bg (3).webp', import.meta.url).href,
+  new URL('../assets/backgrounds/bg (4).webp', import.meta.url).href,
+  new URL('../assets/backgrounds/bg (5).webp', import.meta.url).href,
+  new URL('../assets/backgrounds/bg (6).webp', import.meta.url).href,
 ]
 
 interface Props {
