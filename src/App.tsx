@@ -166,11 +166,21 @@ export default function App() {
 
     try {
       let finalImage: string
+      let imageUrlForQr: string
 
       if (styleId === 'original') {
         // 原版：直接用拍摄的照片，不经过AI处理
         console.log('[handleGenerate] 原版模式，跳过AI处理')
         finalImage = state.capturedPhoto
+        // 上传到服务器获取URL（用于二维码）
+        const uploadRes = await apiFetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: state.capturedPhoto, filename: `original_${Date.now()}.jpg` })
+        })
+        const uploadData = await uploadRes.json()
+        imageUrlForQr = uploadData.url || finalImage
+        console.log('[handleGenerate] 原版上传完成:', imageUrlForQr?.slice(0, 80))
       } else {
         // AI生成图片（返回远程URL）
         finalImage = await generateAIImage(
@@ -179,6 +189,7 @@ export default function App() {
           state.mockMode,
           signal
         )
+        imageUrlForQr = finalImage
         console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
       }
 
@@ -195,7 +206,7 @@ export default function App() {
       }).catch(() => {})
 
       // 生成下载页面URL（微信扫码可直接下载）
-      const downloadUrl = `/download?url=${encodeURIComponent(finalImage)}&frame=${state.selectedFrame || 'frame1'}`
+      const downloadUrl = `/download?url=${encodeURIComponent(imageUrlForQr)}&frame=${state.selectedFrame || 'frame1'}`
       console.log('[handleGenerate] 跳转到结果页')
       setResultImage(finalImage)
       setServerUrl(downloadUrl)
