@@ -731,7 +731,21 @@ app.get('/api/admin/photos-with-info', authMiddleware, async (req, res) => {
 
     const total = db.prepare('SELECT COUNT(*) as total FROM photos').get().total
 
-    res.json({ photos: rows, total, page, limit })
+    // 检查文件实际路径，添加正确的URL
+    const photosWithUrl = rows.map(p => {
+      let url = `/uploads/${p.filename}`
+      // 检查文件是否在根目录
+      if (!existsSync(join(uploadsDir, p.filename))) {
+        // 检查是否在已完成照片目录
+        const finishedPath = join(uploadsDir, '已完成照片', p.filename)
+        if (existsSync(finishedPath)) {
+          url = `/uploads/已完成照片/${p.filename}`
+        }
+      }
+      return { ...p, url }
+    })
+
+    res.json({ photos: photosWithUrl, total, page, limit })
   } catch (err) {
     res.status(500).json({ error: '获取失败' })
   }
