@@ -36,68 +36,57 @@ export default function PrintPage({
     console.log('[Download] resultImage:', resultImage ? resultImage.slice(0, 100) + '...' : 'NULL')
     console.log('[Download] selectedFrame prop:', selectedFrame)
     console.log('[Download] frameSrc 计算值:', frameSrc)
-    console.log('[Download] resultImage 类型:', resultImage?.startsWith('data:') ? 'base64' : resultImage?.startsWith('blob:') ? 'blob' : 'remote URL')
 
     setIsDownloading(true)
     try {
-      // 通过代理加载图片（避免CORS问题）
-      const loadImage = async (src: string, label: string): Promise<HTMLImageElement> => {
-        console.log(`[Download][${label}] 加载图片:`, src.slice(0, 100))
-
-        // 如果是base64或blob，直接加载
-        if (src.startsWith('data:') || src.startsWith('blob:')) {
-          console.log(`[Download][${label}] 直接加载 (data/blob)`)
-          return new Promise((resolve, reject) => {
-            const img = new Image()
-            img.onload = () => {
-              console.log(`[Download][${label}] 加载成功, 尺寸: ${img.naturalWidth}x${img.naturalHeight}`)
-              resolve(img)
-            }
-            img.onerror = (e) => {
-              console.error(`[Download][${label}] 加载失败:`, e)
-              reject(new Error(`${label} 图片加载失败`))
-            }
-            img.src = src
-          })
-        }
-
-        // 远程URL通过代理加载
-        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
-        console.log(`[Download][${label}] 通过代理加载, proxyUrl:`, proxyUrl.slice(0, 120))
-
-        const resp = await apiFetch(proxyUrl)
-        console.log(`[Download][${label}] 代理响应状态: ${resp.status} ${resp.statusText}`)
-
-        if (!resp.ok) {
-          const errorText = await resp.text().catch(() => '无法读取错误信息')
-          console.error(`[Download][${label}] 代理返回错误:`, errorText.slice(0, 200))
-          throw new Error(`代理加载${label}失败: HTTP ${resp.status}`)
-        }
-
-        const blob = await resp.blob()
-        console.log(`[Download][${label}] 获取blob, size=${blob.size}, type=${blob.type}`)
-
-        if (blob.size === 0) {
-          throw new Error(`代理返回的${label}图片为空 (blob size=0)`)
-        }
-
-        const blobUrl = URL.createObjectURL(blob)
-        console.log(`[Download][${label}] 创建blobUrl:`, blobUrl)
-
+      // 直接加载图片（支持CORS）
+      const directLoad = (src: string): Promise<HTMLImageElement> => {
         return new Promise((resolve, reject) => {
           const img = new Image()
-          img.onload = () => {
-            console.log(`[Download][${label}] blob图片加载成功, 尺寸: ${img.naturalWidth}x${img.naturalHeight}`)
-            URL.revokeObjectURL(blobUrl)
-            resolve(img)
-          }
-          img.onerror = (e) => {
-            console.error(`[Download][${label}] blob图片加载失败:`, e)
-            URL.revokeObjectURL(blobUrl)
-            reject(new Error(`${label} blob图片加载失败`))
-          }
+          img.crossOrigin = 'anonymous'
+          img.onload = () => resolve(img)
+          img.onerror = () => reject(new Error('直接加载失败'))
+          img.src = src
+        })
+      }
+
+      // 加载blob
+      const loadBlob = (blob: Blob): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+          const blobUrl = URL.createObjectURL(blob)
+          const img = new Image()
+          img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img) }
+          img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('blob加载失败')) }
           img.src = blobUrl
         })
+      }
+
+      // 加载图片：base64/blob直接加载，远程URL先尝试代理，失败后直接加载
+      const loadImage = async (src: string, label: string): Promise<HTMLImageElement> => {
+        console.log(`[Download][${label}] 加载:`, src.slice(0, 80))
+
+        // base64/blob 直接加载
+        if (src.startsWith('data:') || src.startsWith('blob:')) {
+          console.log(`[Download][${label}] 直接加载`)
+          return directLoad(src)
+        }
+
+        // 远程URL：先尝试代理
+        try {
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
+          const resp = await apiFetch(proxyUrl)
+          if (!resp.ok) throw new Error(`代理返回 ${resp.status}`)
+          const blob = await resp.blob()
+          if (blob.size === 0) throw new Error('blob为空')
+          console.log(`[Download][${label}] 代理成功, blob大小: ${blob.size}`)
+          return loadBlob(blob)
+        } catch (proxyErr) {
+          console.warn(`[Download][${label}] 代理失败，尝试直接加载:`, proxyErr)
+          // Fallback: 直接从CDN加载
+          const img = await directLoad(src)
+          console.log(`[Download][${label}] 直接加载成功, 尺寸: ${img.naturalWidth}x${img.naturalHeight}`)
+          return img
+        }
       }
 
       // 加载照片
