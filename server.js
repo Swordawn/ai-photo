@@ -463,6 +463,38 @@ app.post('/api/save-photo-record', (req, res) => {
   }
 })
 
+// 保存远程照片到本地（自动下载AI生成的照片）
+app.post('/api/save-remote-photo', async (req, res) => {
+  try {
+    const { url, regId, style } = req.body
+    if (!url) return res.status(400).json({ error: '缺少 url' })
+
+    const filename = `photo_${Date.now()}.jpg`
+    const filepath = join(uploadsDir, '已完成照片', filename)
+
+    // 确保目录存在
+    if (!existsSync(join(uploadsDir, '已完成照片'))) {
+      await mkdir(join(uploadsDir, '已完成照片'), { recursive: true })
+    }
+
+    // 下载远程图片
+    const resp = await fetch(url, { signal: AbortSignal.timeout(30000) })
+    if (!resp.ok) throw new Error(`下载失败: ${resp.status}`)
+
+    const buffer = Buffer.from(await resp.arrayBuffer())
+    await writeFile(filepath, buffer)
+
+    // 保存到数据库
+    db.prepare("INSERT INTO photos (filename, style, reg_id, created_at) VALUES (?, ?, ?, datetime('now'))").run(filename, style || '', regId || null)
+
+    console.log(`[保存照片] ${filename} (${buffer.length} bytes)`)
+    res.json({ success: true, filename })
+  } catch (err) {
+    console.error('保存远程照片失败:', err)
+    res.status(500).json({ error: '保存失败: ' + err.message })
+  }
+})
+
 // 管理员：获取所有登记
 app.get('/api/admin/registrations', authMiddleware, (req, res) => {
   const rows = db.prepare('SELECT * FROM registrations ORDER BY id DESC LIMIT 100').all()
