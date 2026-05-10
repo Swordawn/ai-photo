@@ -405,7 +405,7 @@ app.post('/api/save-photo-record', (req, res) => {
   try {
     const { regId, filename, style } = req.body
     if (!filename) return res.status(400).json({ error: '缺少 filename' })
-    db.prepare('INSERT INTO photos (filename, style, reg_id, created_at) VALUES (?, ?, ?, datetime("now"))').run(filename, style || '', regId || null)
+    db.prepare("INSERT INTO photos (filename, style, reg_id, created_at) VALUES (?, ?, ?, datetime('now'))").run(filename, style || '', regId || null)
     res.json({ success: true })
   } catch (err) {
     console.error('保存照片记录失败:', err)
