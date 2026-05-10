@@ -78,11 +78,12 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // 设备心跳（每30秒通过CF隧道上报到中心服务器，接收命令）
+  // 设备心跳（每30秒上报，自动检测中心服务器地址）
   useEffect(() => {
-    const publicHost = import.meta.env.VITE_PUBLIC_HOST
-    const apiBase = publicHost ? `https://${publicHost}` : ''
     const sendHeartbeat = () => {
+      // 自动检测：如果在本地开发就用相对路径，否则用当前域名
+      const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+      const apiBase = isLocal ? '' : `${window.location.protocol}//${window.location.host}`
       fetch(`${apiBase}/api/device/heartbeat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
