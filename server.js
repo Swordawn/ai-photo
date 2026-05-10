@@ -5,6 +5,7 @@ import { writeFile, mkdir, readdir, unlink, readFile, rm } from 'fs/promises'
 import { join, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
+import os from 'os'
 import { spawn, execSync } from 'child_process'
 import { config } from 'dotenv'
 import Database from 'better-sqlite3'
@@ -114,6 +115,51 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `)
+
+// AI 风格管理
+db.exec(`
+  CREATE TABLE IF NOT EXISTS styles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1,
+    sort_order INTEGER DEFAULT 0
+  )
+`)
+
+// 相框管理
+db.exec(`
+  CREATE TABLE IF NOT EXISTS frames (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1,
+    sort_order INTEGER DEFAULT 0
+  )
+`)
+
+// 系统参数
+db.exec(`
+  CREATE TABLE IF NOT EXISTS params (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT
+  )
+`)
+
+// 初始化默认风格
+const defaultStyles = [
+  { id: 'guofeng', name: '古风', prompt: '转换为古风中国画风格，水墨质感，古典优雅，保持人物面部清晰', sort: 1 },
+  { id: 'guochao', name: '国潮', prompt: '转换为国潮艺术风格，鲜艳色彩，现代中国风，潮流插画感', sort: 2 },
+  { id: 'jiaopian', name: '胶片风', prompt: '转换为复古胶片摄影风格，暖色调，颗粒质感，怀旧氛围', sort: 3 },
+  { id: 'qingxin', name: '小清新', prompt: '转换为小清新风格，明亮柔和色调，自然光线，清新淡雅', sort: 4 },
+  { id: 'youhua', name: '油画', prompt: '转换为油画风格，厚重笔触质感，丰富色彩层次，艺术感强', sort: 5 },
+  { id: 'sumiao', name: '素描', prompt: '转换为铅笔素描风格，黑白线条，细腻明暗关系，写实素描', sort: 6 },
+]
+const insertStyle = db.prepare('INSERT OR IGNORE INTO styles (id, name, prompt, sort_order) VALUES (?, ?, ?, ?)')
+for (const s of defaultStyles) {
+  insertStyle.run(s.id, s.name, s.prompt, s.sort)
+}
 
 // ===== API 锁中间件 =====
 // 开启后拦截所有前端 API 调用（防止 API 被盗用/滥用）
@@ -536,337 +582,282 @@ app.delete('/api/admin/photos', authMiddleware, async (req, res) => {
   } catch { res.status(500).json({ error: '清空失败' }) }
 })
 
+// ===== 服务器管理 API =====
+
+// 系统信息
+app.get('/api/admin/server-info', authMiddleware, (req, res) => {
+  const cpus = os.cpus()
+  const totalMem = os.totalmem()
+  const freeMem = os.freemem()
+  const uptime = os.uptime()
+  let diskUsage = ['0', '0', '0', '0%']
+  try {
+    diskUsage = execSync("df -h / | tail -1 | awk '{print $2,$3,$4,$5}'", { timeout: 5000 }).toString().trim().split(' ')
+  } catch {}
+
+  res.json({
+    cpu: {
+      model: cpus[0]?.model || 'Unknown',
+      cores: cpus.length,
+      usage: Math.round((1 - os.loadavg()[0] / cpus.length) * 100)
+    },
+    memory: {
+      total: Math.round(totalMem / 1024 / 1024),
+      used: Math.round((totalMem - freeMem) / 1024 / 1024),
+      free: Math.round(freeMem / 1024 / 1024),
+      percent: Math.round((1 - freeMem / totalMem) * 100)
+    },
+    disk: {
+      total: diskUsage[0] || '0',
+      used: diskUsage[1] || '0',
+      free: diskUsage[2] || '0',
+      percent: diskUsage[3] || '0%'
+    },
+    uptime: Math.floor(uptime / 3600) + 'h ' + Math.floor((uptime % 3600) / 60) + 'm',
+    nodeVersion: process.version,
+    platform: os.platform(),
+    hostname: os.hostname()
+  })
+})
+
+// 获取日志
+app.get('/api/admin/logs', authMiddleware, (req, res) => {
+  const lines = parseInt(req.query.lines) || 100
+  try {
+    const logs = execSync(`sudo pm2 logs ai-photo --nostream --lines ${lines} 2>&1 | head -${lines}`, { timeout: 5000 }).toString()
+    res.json({ logs })
+  } catch (err) {
+    res.json({ logs: '无法获取日志: ' + err.message })
+  }
+})
+
+// 重启服务
+app.post('/api/admin/restart', authMiddleware, (req, res) => {
+  try {
+    execSync('sudo pm2 restart ai-photo', { timeout: 10000 })
+    res.json({ success: true, message: '服务已重启' })
+  } catch (err) {
+    res.status(500).json({ error: '重启失败: ' + err.message })
+  }
+})
+
+// 读取 .env
+app.get('/api/admin/env', authMiddleware, async (req, res) => {
+  try {
+    const envContent = await readFile(join(__dirname, '.env'), 'utf-8')
+    const env = {}
+    envContent.split('\n').forEach(line => {
+      const [key, ...value] = line.split('=')
+      if (key && !key.startsWith('#')) {
+        env[key.trim()] = value.join('=').trim()
+      }
+    })
+    res.json({ env })
+  } catch (err) {
+    res.status(500).json({ error: '读取失败' })
+  }
+})
+
+// 更新 .env
+app.post('/api/admin/env', authMiddleware, async (req, res) => {
+  try {
+    const { key, value } = req.body
+    if (!key) return res.status(400).json({ error: '缺少 key' })
+
+    let envContent = ''
+    try { envContent = await readFile(join(__dirname, '.env'), 'utf-8') } catch {}
+
+    const lines = envContent.split('\n')
+    let found = false
+    const newLines = lines.map(line => {
+      if (line.startsWith(key + '=')) {
+        found = true
+        return `${key}=${value}`
+      }
+      return line
+    })
+
+    if (!found) newLines.push(`${key}=${value}`)
+    await writeFile(join(__dirname, '.env'), newLines.join('\n'))
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: '更新失败' })
+  }
+})
+
+// ===== 数据管理 API =====
+
+// 获取登记记录（增强版，支持分页搜索）
+app.get('/api/admin/registrations', authMiddleware, (req, res) => {
+  const page = parseInt(req.query.page) || 1
+  const limit = parseInt(req.query.limit) || 50
+  const search = req.query.search || ''
+  const offset = (page - 1) * limit
+
+  let query = 'SELECT * FROM registrations'
+  let countQuery = 'SELECT COUNT(*) as total FROM registrations'
+  const params = []
+
+  if (search) {
+    const where = ' WHERE name LIKE ? OR class_name LIKE ? OR phone LIKE ?'
+    query += where
+    countQuery += where
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`)
+  }
+
+  query += ' ORDER BY id DESC LIMIT ? OFFSET ?'
+
+  const total = db.prepare(countQuery).get(...params).total
+  const rows = db.prepare(query).all(...params, limit, offset)
+
+  res.json({ registrations: rows, total, page, limit })
+})
+
+// 获取照片记录（关联登记信息）
+app.get('/api/admin/photos-with-info', authMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 50
+    const offset = (page - 1) * limit
+
+    // 从数据库获取照片记录（关联登记）
+    const rows = db.prepare(`
+      SELECT p.*, r.name, r.class_name, r.phone
+      FROM photos p
+      LEFT JOIN registrations r ON p.reg_id = r.id
+      ORDER BY p.id DESC
+      LIMIT ? OFFSET ?
+    `).all(limit, offset)
+
+    const total = db.prepare('SELECT COUNT(*) as total FROM photos').get().total
+
+    res.json({ photos: rows, total, page, limit })
+  } catch (err) {
+    res.status(500).json({ error: '获取失败' })
+  }
+})
+
+// 统计数据
+app.get('/api/admin/stats', authMiddleware, (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+
+    // 今日拍照数
+    const todayCount = db.prepare("SELECT COUNT(*) as c FROM photos WHERE date(created_at) = ?").get(today).c
+
+    // 总照片数
+    const totalCount = db.prepare("SELECT COUNT(*) as c FROM photos").get().c
+
+    // 总登记数
+    const totalRegs = db.prepare("SELECT COUNT(*) as c FROM registrations").get().c
+
+    // 风格分布
+    const styleStats = db.prepare("SELECT style, COUNT(*) as count FROM photos GROUP BY style ORDER BY count DESC").all()
+
+    // 最近7天每日数量
+    const dailyStats = db.prepare(`
+      SELECT date(created_at) as date, COUNT(*) as count
+      FROM photos
+      WHERE created_at >= datetime('now', '-7 days')
+      GROUP BY date(created_at)
+      ORDER BY date DESC
+    `).all()
+
+    res.json({ todayCount, totalCount, totalRegs, styleStats, dailyStats })
+  } catch (err) {
+    res.status(500).json({ error: '统计失败' })
+  }
+})
+
+// 导出 CSV
+app.get('/api/admin/export/csv', authMiddleware, (req, res) => {
+  try {
+    const type = req.query.type || 'registrations'
+
+    if (type === 'registrations') {
+      const rows = db.prepare('SELECT * FROM registrations ORDER BY id DESC').all()
+      const csv = '﻿' + 'ID,姓名,班级,手机号,登记时间,已使用\n' +
+        rows.map(r => `${r.id},"${r.name}","${r.class_name}","${r.phone}","${r.created_at}",${r.used}`).join('\n')
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', 'attachment; filename=registrations.csv')
+      res.send(csv)
+    } else if (type === 'photos') {
+      const rows = db.prepare(`
+        SELECT p.*, r.name, r.class_name
+        FROM photos p
+        LEFT JOIN registrations r ON p.reg_id = r.id
+        ORDER BY p.id DESC
+      `).all()
+      const csv = '﻿' + 'ID,文件名,风格,相框,登记ID,姓名,班级,拍摄时间\n' +
+        rows.map(r => `${r.id},"${r.filename}","${r.style}","${r.frame||''}",${r.reg_id||''},"${r.name||''}","${r.class_name||''}","${r.created_at}"`).join('\n')
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', 'attachment; filename=photos.csv')
+      res.send(csv)
+    }
+  } catch (err) {
+    res.status(500).json({ error: '导出失败' })
+  }
+})
+
+// ===== 内容配置 API =====
+
+// 获取风格列表
+app.get('/api/admin/styles', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM styles ORDER BY sort_order').all()
+  res.json({ styles: rows })
+})
+
+// 添加/修改风格
+app.post('/api/admin/styles', authMiddleware, (req, res) => {
+  const { id, name, prompt, enabled, sort_order } = req.body
+  if (!id || !name || !prompt) return res.status(400).json({ error: '缺少必填字段' })
+
+  db.prepare('INSERT OR REPLACE INTO styles (id, name, prompt, enabled, sort_order) VALUES (?, ?, ?, ?, ?)')
+    .run(id, name, prompt, enabled ?? 1, sort_order ?? 0)
+  res.json({ success: true })
+})
+
+// 删除风格
+app.delete('/api/admin/styles/:id', authMiddleware, (req, res) => {
+  db.prepare('DELETE FROM styles WHERE id = ?').run(req.params.id)
+  res.json({ success: true })
+})
+
+// 获取相框列表
+app.get('/api/admin/frames', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM frames ORDER BY sort_order').all()
+  res.json({ frames: rows })
+})
+
+// 获取系统参数
+app.get('/api/admin/params', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM params').all()
+  const params = {}
+  rows.forEach(r => params[r.key] = r.value)
+  res.json({ params })
+})
+
+// 更新系统参数
+app.post('/api/admin/params', authMiddleware, (req, res) => {
+  const { key, value, description } = req.body
+  if (!key) return res.status(400).json({ error: '缺少 key' })
+
+  db.prepare('INSERT OR REPLACE INTO params (key, value, description) VALUES (?, ?, ?)')
+    .run(key, value, description || '')
+  res.json({ success: true })
+})
+
 // ===== 管理页面 HTML =====
 function getAdminHTML() {
-  return `<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>自助机管理后台</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0f172a;--card:#1e293b;--card-hover:#253449;--border:#334155;--accent:#3b82f6;--accent-dim:#1e40af;--danger:#ef4444;--success:#22c55e;--warning:#f59e0b;--text:#f1f5f9;--text-dim:#94a3b8;--text-muted:#64748b;--radius:12px;--radius-sm:8px}
-body{font-family:'Noto Sans SC',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
-/* 登录 */
-.login{display:flex;align-items:center;justify-content:center;height:100vh;padding:20px}
-.login-box{background:var(--card);padding:48px 40px;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,.4);text-align:center;max-width:360px;width:100%;border:1px solid var(--border)}
-.login-box h2{font-size:22px;font-weight:700;margin-bottom:8px}
-.login-box p{color:var(--text-dim);font-size:13px;margin-bottom:28px}
-.login-box input{width:100%;padding:14px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:15px;background:var(--bg);color:var(--text);outline:none;transition:.2s}
-.login-box input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
-.login-box button{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;margin-top:12px;transition:.2s}
-.login-box button:hover{background:var(--accent-dim)}
-.login-err{color:var(--danger);font-size:12px;margin-top:10px;display:none}
-/* 主应用 */
-.app{display:none;min-height:100vh}
-.app.show{display:block;min-height:100vh}
-/* 状态栏 */
-.status-bar{background:var(--card);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
-.status-left{display:flex;align-items:center;gap:10px}
-.status-dot{width:10px;height:10px;border-radius:50%;background:var(--success);box-shadow:0 0 8px rgba(34,197,94,.4);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.status-title{font-weight:600;font-size:15px}
-.status-right{display:flex;align-items:center;gap:12px}
-.btn-logout{background:none;border:1px solid var(--border);color:var(--text-dim);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:.2s}
-.btn-logout:hover{border-color:var(--danger);color:var(--danger)}
-/* 统计条 */
-.stats-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px 20px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;transition:.2s}
-.stat-card:hover{border-color:var(--accent);transform:translateY(-1px)}
-.stat-num{font-size:26px;font-weight:700;color:var(--accent);line-height:1.2}
-.stat-label{font-size:11px;color:var(--text-muted);margin-top:4px}
-/* 快捷控制 */
-.quick-ctrl{padding:0 20px 16px}
-.ctrl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.ctrl-btn{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 12px;text-align:center;cursor:pointer;transition:.2s;user-select:none}
-.ctrl-btn:hover{border-color:var(--accent);background:var(--card-hover)}
-.ctrl-btn.active{border-color:var(--accent);background:rgba(59,130,246,.1)}
-.ctrl-btn.danger.active{border-color:var(--danger);background:rgba(239,68,68,.1)}
-.ctrl-icon{font-size:22px;margin-bottom:6px}
-.ctrl-name{font-size:12px;color:var(--text-dim);font-weight:500}
-.ctrl-status{font-size:10px;margin-top:4px;padding:2px 8px;border-radius:10px;display:inline-block}
-.ctrl-status.on{background:rgba(34,197,94,.15);color:var(--success)}
-.ctrl-status.off{background:rgba(148,163,184,.1);color:var(--text-muted)}
-.ctrl-status.locked{background:rgba(239,68,68,.15);color:var(--danger)}
-/* 超时滑块 */
-.slider-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin:0 20px 16px}
-.slider-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.slider-header span{font-size:13px;color:var(--text-dim)}
-.slider-val{color:var(--accent);font-weight:600;font-size:14px}
-input[type=range]{width:100%;height:6px;-webkit-appearance:none;background:var(--border);border-radius:3px;outline:none}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 2px 8px rgba(59,130,246,.3)}
-/* 隧道地址 */
-.tunnel-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin:0 20px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.tunnel-url{font-size:13px;color:var(--accent);word-break:break-all;flex:1}
-.tunnel-copy{background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;transition:.2s}
-.tunnel-copy:hover{background:var(--accent-dim)}
-/* 照片区域 */
-.photos-section{padding:0 20px 20px}
-.photos-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.photos-title{font-size:14px;font-weight:600}
-.photos-actions{display:flex;gap:8px}
-.btn-sm{padding:6px 14px;border-radius:6px;border:none;font-size:12px;cursor:pointer;transition:.2s}
-.btn-danger{background:var(--danger);color:#fff}.btn-danger:hover{background:#dc2626}
-.btn-ghost{background:var(--card);border:1px solid var(--border);color:var(--text-dim)}.btn-ghost:hover{border-color:var(--text-dim)}
-.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
-.photo-item{position:relative;aspect-ratio:2/3;border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;transition:.2s}
-.photo-item:hover{transform:scale(1.02);box-shadow:0 8px 24px rgba(0,0,0,.3)}
-.photo-item img{width:100%;height:100%;object-fit:cover}
-.photo-overlay{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.7) 0%,transparent 50%);opacity:0;transition:.2s;display:flex;align-items:flex-end;padding:8px}
-.photo-item:hover .photo-overlay{opacity:1}
-.photo-btns{display:flex;gap:4px;width:100%}
-.photo-btns button{flex:1;padding:6px;border:none;border-radius:4px;font-size:10px;font-weight:500;cursor:pointer;color:#fff;transition:.15s}
-.photo-btns .dl{background:var(--accent)}.photo-btns .dl:hover{background:var(--accent-dim)}
-.photo-btns .rm{background:var(--danger)}.photo-btns .rm:hover{background:#dc2626}
-.photo-name{position:absolute;top:6px;left:6px;font-size:9px;color:rgba(255,255,255,.7);background:rgba(0,0,0,.4);padding:2px 6px;border-radius:4px;opacity:0;transition:.2s}
-.photo-item:hover .photo-name{opacity:1}
-/* 空状态 */
-.empty{text-align:center;padding:60px 20px;color:var(--text-muted)}
-.empty-icon{font-size:48px;margin-bottom:12px;opacity:.3}
-.empty-text{font-size:14px}
-/* 自定义确认弹窗 */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:320px;width:90%;text-align:center}
-.modal h3{font-size:16px;margin-bottom:8px}
-.modal p{font-size:13px;color:var(--text-dim);margin-bottom:20px}
-.modal-btns{display:flex;gap:10px}
-.modal-btns button{flex:1;padding:10px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;transition:.2s}
-.modal-btns .cancel{background:var(--card);border:1px solid var(--border);color:var(--text-dim)}
-.modal-btns .confirm{background:var(--danger);color:#fff}
-.modal-btns .confirm.primary{background:var(--accent)}
-/* 手机端自适应 */
-@media(max-width:767px){
-.stats-bar{grid-template-columns:repeat(2,1fr)}
-.ctrl-grid{grid-template-columns:repeat(3,1fr)}
-.stat-num{font-size:22px}
-.photo-grid{grid-template-columns:repeat(2,1fr)}
-.tunnel-card{flex-direction:column;align-items:flex-start}
-}
-/* 桌面端 */
-@media(min-width:768px){
-.main-area{flex:1;overflow-y:auto;padding-bottom:20px}
-}
-/* 加载态 */
-.loading{opacity:.5;pointer-events:none}
-/* toast */
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:var(--radius-sm);font-size:13px;z-index:200;animation:toastIn .3s ease}
-@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-/* 设备管理 */
-.devices-section{padding:0 20px 20px}
-.devices-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.devices-title{font-size:14px;font-weight:600}
-.devices-actions{display:flex;gap:8px}
-.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
-.device-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;transition:.2s;position:relative}
-.device-card:hover{border-color:var(--accent);transform:translateY(-1px)}
-.device-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.device-name{font-size:13px;font-weight:600;color:var(--text)}
-.device-name-input{font-size:13px;font-weight:600;color:var(--text);background:var(--bg);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;width:120px;outline:none}
-.device-status{display:flex;align-items:center;gap:5px;font-size:11px}
-.device-dot{width:8px;height:8px;border-radius:50%}
-.device-dot.on{background:var(--success);box-shadow:0 0 6px rgba(34,197,94,.4)}
-.device-dot.off{background:var(--text-muted)}
-.device-page{font-size:11px;color:var(--text-dim);margin-bottom:4px}
-.device-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
-.device-info{font-size:10px;color:var(--text-muted)}
-.device-id{font-size:10px;color:var(--text-muted);font-family:monospace;margin-bottom:6px}
-.btn-shutdown{background:var(--danger);color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer;transition:.2s}
-.btn-shutdown:hover{background:#dc2626}
-.btn-shutdown-all{background:var(--danger);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:.2s}
-.btn-shutdown-all:hover{background:#dc2626}
-</style></head><body>
-<div class="login" id="loginPage"><div class="login-box">
-<h2>自助机管理后台</h2>
-<p>输入管理密码以继续</p>
-<input type="password" id="pwdInput" placeholder="管理密码" onkeydown="if(event.key==='Enter')doLogin()">
-<button onclick="doLogin()">登 录</button>
-<div class="login-err" id="loginError">密码错误，请重试</div>
-</div></div>
-<div class="app" id="appPage">
-<div class="main-area">
-<div class="status-bar">
-<div class="status-left"><div class="status-dot" id="statusDot"></div><span class="status-title">自助机管理后台</span></div>
-<div class="status-right"><span id="uptimeTag" style="font-size:11px;color:var(--text-muted)"></span><span id="versionTag" style="font-size:11px;color:var(--text-muted)"></span><button class="btn-logout" onclick="checkUpdate()" style="margin-right:6px">检查更新</button><button class="btn-logout" onclick="doLogout()">登出</button></div>
-</div>
-<div class="stats-bar">
-<div class="stat-card"><div class="stat-num" id="sPage">-</div><div class="stat-label">当前页面</div></div>
-<div class="stat-card"><div class="stat-num" id="sToday">0</div><div class="stat-label">今日拍照</div></div>
-<div class="stat-card"><div class="stat-num" id="sPhotos">0</div><div class="stat-label">已完成</div></div>
-<div class="stat-card"><div class="stat-num" id="sUp">0m</div><div class="stat-label">运行时间</div></div>
-<div class="stat-card"><div class="stat-num" id="sDevices">0</div><div class="stat-label">在线设备</div></div>
-</div>
-<div class="quick-ctrl">
-<div class="ctrl-grid">
-<div class="ctrl-btn" id="ctrlMock" onclick="toggleMock()">
-<div class="ctrl-icon">&#9889;</div><div class="ctrl-name">Mock</div><span class="ctrl-status off" id="mockTag">关闭</span>
-</div>
-<div class="ctrl-btn" id="ctrlMachine" onclick="toggleMachine()">
-<div class="ctrl-icon">&#9654;</div><div class="ctrl-name">自助机</div><span class="ctrl-status on" id="machineTag">运行</span>
-</div>
-<div class="ctrl-btn danger" id="ctrlApi" onclick="toggleApiLock()">
-<div class="ctrl-icon">&#128274;</div><div class="ctrl-name">API锁</div><span class="ctrl-status off" id="apiTag">未锁</span>
-</div>
-</div>
-</div>
-<div class="slider-card">
-<div class="slider-header"><span>空闲超时</span><span class="slider-val" id="timeoutV">120秒</span></div>
-<input type="range" id="timeoutSlider" min="60" max="600" step="30" value="120" oninput="updateTimeout(this.value)">
-</div>
-<div class="tunnel-card">
-<span class="tunnel-url" id="sTunnel">-</span>
-<button class="tunnel-copy" onclick="copyTunnel()">复制</button>
-</div>
-<div class="photos-section">
-<div class="photos-header">
-<span class="photos-title">已完成照片</span>
-<div class="photos-actions">
-<button class="btn-sm btn-ghost" onclick="loadPhotos()">刷新</button>
-<button class="btn-sm btn-danger" onclick="confirmClearAll()">清空全部</button>
-</div>
-</div>
-<div class="photo-grid" id="photoGrid"></div>
-<div class="empty" id="emptyState" style="display:none"><div class="empty-icon">&#128247;</div><div class="empty-text">暂无照片</div></div>
-</div>
-<div class="devices-section">
-<div class="devices-header">
-<span class="devices-title">设备管理</span>
-<div class="devices-actions">
-<button class="btn-sm btn-ghost" onclick="loadDevices()">刷新</button>
-<button class="btn-shutdown-all" onclick="confirmShutdownAll()">全部关机</button>
-</div>
-</div>
-<div class="device-grid" id="deviceGrid"></div>
-<div class="empty" id="emptyDevices" style="display:none"><div class="empty-icon">&#128187;</div><div class="empty-text">暂无设备连接</div></div>
-</div>
-</div>
-</div>
-<div id="modalRoot"></div>
-<script>
-let pwd='';
-let _statusInterval=null;
-function api(p,m,b){return fetch(p,{method:m||'GET',headers:{'Content-Type':'application/json','X-Admin-Password':pwd},body:b?JSON.stringify(b):undefined}).then(r=>r.json()).catch(()=>({error:'网络错误'}))}
-function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500)}
-function showModal(title,text,btns){
-return new Promise(r=>{const o=document.createElement('div');o.className='modal-overlay';
-o.innerHTML='<div class="modal"><h3>'+title+'</h3><p>'+text+'</p><div class="modal-btns">'+btns.map((b,i)=>'<button class="'+b.cls+'" data-i="'+i+'">'+b.text+'</button>').join('')+'</div></div>';
-o.querySelectorAll('button').forEach(b=>b.onclick=()=>{o.remove();r(parseInt(b.dataset.i))});
-document.getElementById('modalRoot').appendChild(o)})}
-function doLogin(){
-pwd=document.getElementById('pwdInput').value;
-if(!pwd){document.getElementById('loginError').textContent='请输入密码';document.getElementById('loginError').style.display='block';return}
-document.getElementById('loginError').style.display='none';
-fetch('/api/admin/status',{headers:{'X-Admin-Password':pwd}}).then(r=>{
-if(r.status===401){document.getElementById('loginError').textContent='密码错误';document.getElementById('loginError').style.display='block';return}
-if(!r.ok){document.getElementById('loginError').textContent='服务器错误 ('+r.status+')';document.getElementById('loginError').style.display='block';return}
-return r.json()
-}).then(r=>{
-if(!r||r.error){document.getElementById('loginError').textContent='密码错误';document.getElementById('loginError').style.display='block';return}
-document.getElementById('loginPage').style.display='none';
-document.getElementById('appPage').classList.add('show');
-loadAll();if(_statusInterval)clearInterval(_statusInterval);_statusInterval=setInterval(function(){loadStatus();loadDevices()},30000)
-}).catch(e=>{
-document.getElementById('loginError').textContent='网络错误，请检查连接';
-document.getElementById('loginError').style.display='block'
-})}
-function doLogout(){pwd='';document.getElementById('appPage').classList.remove('show');document.getElementById('loginPage').style.display='flex';document.getElementById('pwdInput').value=''}
-function loadAll(){loadStatus();loadConfig();loadPhotos();loadVersion();loadDevices()}
-function loadStatus(){api('/api/admin/status').then(r=>{
-document.getElementById('sPage').textContent=r.currentPage||'-';
-document.getElementById('sToday').textContent=r.todayCount||0;
-document.getElementById('sPhotos').textContent=r.photoCount||0;
-document.getElementById('sUp').textContent=r.uptime||'0m';
-document.getElementById('uptimeTag').textContent=r.uptime?'运行 '+r.uptime:'';
-document.getElementById('sTunnel').textContent=r.tunnelUrl?r.tunnelUrl+'/booth-admin':'未连接';
-const dot=document.getElementById('statusDot');
-dot.style.background=r.paused?'var(--warning)':'var(--success)';
-dot.style.boxShadow=r.paused?'0 0 8px rgba(245,158,11,.4)':'0 0 8px rgba(34,197,94,.4)'})}
-function loadConfig(){api('/api/admin/config').then(r=>{
-const m=document.getElementById('ctrlMock');m.classList.toggle('active',r.mockMode);
-document.getElementById('mockTag').className='ctrl-status '+(r.mockMode?'on':'off');
-document.getElementById('mockTag').textContent=r.mockMode?'开启':'关闭';
-const mc=document.getElementById('ctrlMachine');mc.classList.toggle('active',r.paused);
-document.getElementById('machineTag').className='ctrl-status '+(r.paused?'locked':'on');
-document.getElementById('machineTag').textContent=r.paused?'已暂停':'运行';
-const apiBtn=document.getElementById('ctrlApi');apiBtn.classList.toggle('active',r.apiLocked);
-document.getElementById('apiTag').className='ctrl-status '+(r.apiLocked?'locked':'off');
-document.getElementById('apiTag').textContent=r.apiLocked?'已锁定':'未锁';
-document.getElementById('timeoutSlider').value=r.idleTimeout||120;
-document.getElementById('timeoutV').textContent=(r.idleTimeout||120)+'秒'})}
-function toggleMock(){const on=!document.getElementById('ctrlMock').classList.contains('active');api('/api/admin/config','POST',{mockMode:on}).then(()=>{loadConfig();toast(on?'Mock 已开启':'Mock 已关闭')})}
-function toggleMachine(){const paused=!document.getElementById('ctrlMachine').classList.contains('active');api('/api/admin/config','POST',{paused}).then(()=>{loadConfig();toast(paused?'自助机已暂停':'自助机已恢复')})}
-function toggleApiLock(){const locked=!document.getElementById('ctrlApi').classList.contains('active');
-if(locked){showModal('确认锁定','开启API保护后，自助机将无法正常拍照合成。',[{text:'取消',cls:'cancel'},{text:'确认锁定',cls:'confirm'}]).then(i=>{if(i===1)api('/api/admin/config','POST',{apiLocked:true}).then(()=>{loadConfig();toast('API 已锁定')})})}
-else{api('/api/admin/config','POST',{apiLocked:false}).then(()=>{loadConfig();toast('API 已解锁')})}}
-function updateTimeout(v){document.getElementById('timeoutV').textContent=v+'秒';clearTimeout(window._tt);window._tt=setTimeout(()=>api('/api/admin/config','POST',{idleTimeout:parseInt(v)}),500)}
-function copyTunnel(){const url=document.getElementById('sTunnel').textContent;if(url==='-')return;navigator.clipboard.writeText(url).then(()=>toast('已复制'))}
-function loadPhotos(){api('/api/admin/photos').then(r=>{
-var photos=r.photos||[];
-var grid=document.getElementById('photoGrid');
-var empty=document.getElementById('emptyState');
-if(photos.length===0){grid.innerHTML='';empty.style.display='block';return}
-empty.style.display='none';
-grid.innerHTML=photos.map(function(p){return '<div class="photo-item" data-name="'+encodeURIComponent(p)+'"><img src="/uploads/'+encodeURIComponent(p)+'" loading="lazy"><span class="photo-name">'+p.split('/').pop()+'</span><div class="photo-overlay"><div class="photo-btns"><button class="dl" data-action="dl">下载</button><button class="rm" data-action="rm">删除</button></div></div></div>'}).join('')})}
-function dl(n){window.open('/uploads/'+encodeURIComponent(n))}
-document.addEventListener('DOMContentLoaded',function(){
-var grid=document.getElementById('photoGrid');
-if(grid){
-grid.addEventListener('click',function(e){
-var btn=e.target.closest('[data-action]');
-var card=e.target.closest('.photo-item');
-if(!card)return;
-var name=decodeURIComponent(card.dataset.name);
-if(btn){
-var action=btn.dataset.action;
-e.stopPropagation();
-if(action==='dl'){dl(name)}
-if(action==='rm'){showModal('确认删除','确定删除此照片？',[{text:'取消',cls:'cancel'},{text:'删除',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/photos/'+encodeURIComponent(name),'DELETE').then(function(){loadPhotos();toast('已删除')})}})}
-} else {dl(name)}
-});
-}
-});
-function confirmClearAll(){showModal('确认清空','确定清空所有照片？此操作不可恢复！',[{text:'取消',cls:'cancel'},{text:'清空全部',cls:'confirm'}]).then(i=>{if(i===1)api('/api/admin/photos','DELETE').then(()=>{loadPhotos();toast('已清空')})})}
-function loadVersion(){api('/api/admin/ota-status').then(r=>{document.getElementById('versionTag').textContent='v'+r.localVersion})}
-function checkUpdate(){toast('正在检查...');api('/api/admin/check-update').then(r=>{if(r.hasUpdate){showModal('发现新版本','当前: v'+r.localVersion+' → 最新: v'+r.remoteVersion,[{text:'稍后',cls:'cancel'},{text:'立即更新',cls:'confirm primary'}]).then(i=>{if(i===1){api('/api/admin/do-update','POST').then(()=>{toast('更新中，请等待重启...')})}})}else{toast('已是最新版本 v'+r.localVersion)}}).catch(()=>{toast('检查失败')})}
-function loadDevices(){api('/api/admin/devices').then(r=>{var devices=r.devices||[];var onlineCount=devices.filter(function(d){return d.online}).length;document.getElementById('sDevices').textContent=onlineCount;var grid=document.getElementById('deviceGrid');var empty=document.getElementById('emptyDevices');if(devices.length===0){grid.innerHTML='';empty.style.display='block';return}empty.style.display='none';grid.innerHTML=devices.map(function(d){var ago=Math.floor((Date.now()-d.lastSeen)/1000);var timeText=ago<60?ago+'秒前':ago<3600?Math.floor(ago/60)+'分钟前':Math.floor(ago/3600)+'小时前';return '<div class="device-card" data-id="'+encodeURIComponent(d.id)+'"><div class="device-row"><span class="device-name" data-action="rename">'+escHtml(d.name)+'</span><span class="device-status"><span class="device-dot '+(d.online?'on':'off')+'"></span>'+(d.online?'在线':'离线')+'</span></div><div class="device-id">ID: '+escHtml(d.id)+'</div><div class="device-page">当前页面: '+escHtml(d.page)+'</div><div class="device-meta"><span class="device-info">v'+escHtml(d.version)+' · '+timeText+'</span><button class="btn-shutdown" data-action="shutdown">关机</button></div></div>'}).join('')})}
-function escHtml(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-function confirmShutdownAll(){api('/api/admin/devices').then(function(r){var devices=r.devices||[];if(devices.length===0){toast('无在线设备');return}showModal('全部关机','确定向所有 '+devices.length+' 台设备发送关机命令？此操作不可撤销！',[{text:'取消',cls:'cancel'},{text:'确认全部关机',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/devices/shutdown-all','POST').then(function(r2){loadDevices();toast('已向 '+r2.count+' 台设备发送关机命令')})}})})}
-document.addEventListener('DOMContentLoaded',function(){
-var grid=document.getElementById('deviceGrid');
-if(grid){
-grid.addEventListener('click',function(e){
-var btn=e.target.closest('[data-action]');
-if(!btn)return;
-var card=btn.closest('.device-card');
-if(!card)return;
-var id=decodeURIComponent(card.dataset.id);
-var action=btn.dataset.action;
-if(action==='shutdown'){
-showModal('确认关机','确定向设备 '+id+' 发送关机命令？',[{text:'取消',cls:'cancel'},{text:'确认关机',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/devices/'+encodeURIComponent(id)+'/shutdown','POST').then(function(){loadDevices();toast('已发送关机命令')})}});
-}
-});
-grid.addEventListener('dblclick',function(e){
-var nameEl=e.target.closest('[data-action="rename"]');
-if(!nameEl)return;
-var card=nameEl.closest('.device-card');
-if(!card)return;
-var id=decodeURIComponent(card.dataset.id);
-var oldName=nameEl.textContent;
-var inp=document.createElement('input');
-inp.className='device-name-input';
-inp.value=oldName;
-inp.onblur=function(){
-var newName=inp.value.trim()||id;
-api('/api/admin/devices/'+encodeURIComponent(id)+'/name','PUT',{name:newName}).then(function(){loadDevices();toast('设备已重命名')});
-};
-inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur()};
-nameEl.replaceWith(inp);
-inp.focus();
-inp.select();
-});
-}
-});
-</script></body></html>`
+  // 读取外部HTML文件
+  try {
+    return readFile(join(__dirname, 'admin.html'), 'utf-8')
+  } catch {
+    return '<h1>管理后台加载失败</h1>'
+  }
 }
 
+/* 旧代码已移至 admin.html */
 // ===== 登记页面 HTML =====
 function getRegisterHTML() {
   return `<!DOCTYPE html>

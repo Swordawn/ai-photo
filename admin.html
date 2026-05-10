@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AI写真自助机 - 管理后台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0f172a;--sidebar:#1e293b;--card:#1e293b;--card-hover:#253449;
+  --border:#334155;--accent:#3b82f6;--accent-dim:#1e40af;
+  --danger:#ef4444;--success:#22c55e;--warning:#f59e0b;
+  --text:#f1f5f9;--text-dim:#94a3b8;--text-muted:#64748b;
+  --radius:12px;--radius-sm:8px;
+}
+body{font-family:'Noto Sans SC',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+/* 登录页 */
+.login-page{display:flex;align-items:center;justify-content:center;height:100vh;padding:20px}
+.login-box{background:var(--card);padding:48px 40px;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,.4);text-align:center;max-width:360px;width:100%;border:1px solid var(--border)}
+.login-box h2{font-size:22px;font-weight:700;margin-bottom:8px}
+.login-box p{color:var(--text-dim);font-size:13px;margin-bottom:28px}
+.login-box input{width:100%;padding:14px 18px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:15px;background:var(--bg);color:var(--text);outline:none;transition:.2s}
+.login-box input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.login-box button{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;margin-top:12px;transition:.2s}
+.login-box button:hover{background:var(--accent-dim)}
+.login-err{color:var(--danger);font-size:12px;margin-top:10px;display:none}
+/* 主布局 */
+.app{display:none;height:100vh}
+.app.show{display:flex}
+/* 侧边栏 */
+.sidebar{width:220px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:20px;border-bottom:1px solid var(--border)}
+.sidebar-header h3{font-size:16px;font-weight:600}
+.sidebar-header p{font-size:11px;color:var(--text-dim);margin-top:4px}
+.sidebar-nav{flex:1;padding:12px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--text-dim);transition:.2s;margin-bottom:4px}
+.nav-item:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.nav-item.active{background:var(--accent);color:#fff}
+.nav-item .icon{font-size:16px}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.btn-logout{width:100%;padding:10px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--radius-sm);cursor:pointer;font-size:12px;transition:.2s}
+.btn-logout:hover{border-color:var(--danger);color:var(--danger)}
+/* 主内容区 */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:56px;background:var(--sidebar);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex-shrink:0}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.status-dot{width:10px;height:10px;border-radius:50%;background:var(--success);box-shadow:0 0 8px rgba(34,197,94,.4);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.btn-refresh{padding:6px 12px;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:6px;cursor:pointer;font-size:12px;transition:.2s}
+.btn-refresh:hover{border-color:var(--accent);color:var(--accent)}
+.content{flex:1;overflow-y:auto;padding:24px}
+/* 页面 */
+.page{display:none}
+.page.active{display:block}
+/* 卡片 */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+/* 统计网格 */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center}
+.stat-num{font-size:32px;font-weight:700;color:var(--accent);margin-bottom:4px}
+.stat-label{font-size:12px;color:var(--text-dim)}
+/* 按钮 */
+.btn{padding:8px 16px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;transition:.2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-dim)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{opacity:.8}
+.btn-sm{padding:6px 12px;font-size:12px}
+/* 表格 */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px;text-align:left;border-bottom:1px solid var(--border);font-size:13px}
+th{color:var(--text-dim);font-weight:500;font-size:12px}
+/* 表单 */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;outline:none}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
+.form-group textarea{min-height:80px;resize:vertical}
+/* 搜索框 */
+.search-box{display:flex;gap:12px;margin-bottom:16px}
+.search-box input{flex:1;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;outline:none}
+.search-box input:focus{border-color:var(--accent)}
+/* 分页 */
+.pagination{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px}
+.pagination button{padding:6px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-dim);cursor:pointer;font-size:12px}
+.pagination button:hover{border-color:var(--accent);color:var(--accent)}
+.pagination button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pagination button:disabled{opacity:.5;cursor:not-allowed}
+/* 照片网格 */
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.photo-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.photo-card img{width:100%;height:200px;object-fit:cover}
+.photo-info{padding:12px}
+.photo-info h4{font-size:13px;margin-bottom:4px}
+.photo-info p{font-size:11px;color:var(--text-dim)}
+.photo-actions{padding:0 12px 12px;display:flex;gap:8px}
+/* 日志区域 */
+.log-area{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;font-family:monospace;font-size:12px;max-height:500px;overflow-y:auto;white-space:pre-wrap;color:var(--text-dim)}
+/* 风格列表 */
+.style-list{display:flex;flex-direction:column;gap:12px}
+.style-item{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;display:flex;align-items:center;justify-content:space-between}
+.style-info h4{font-size:14px;margin-bottom:4px}
+.style-info p{font-size:12px;color:var(--text-dim)}
+.style-actions{display:flex;gap:8px}
+/* 开关 */
+.switch{position:relative;width:44px;height:24px;cursor:pointer}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:.3s}
+.switch .slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+.switch input:checked+.slider{background:var(--accent)}
+.switch input:checked+.slider:before{transform:translateX(20px)}
+/* 进度条 */
+.progress{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-top:8px}
+.progress-bar{height:100%;border-radius:4px;transition:.3s}
+.progress-bar.blue{background:var(--accent)}
+.progress-bar.green{background:var(--success)}
+.progress-bar.yellow{background:var(--warning)}
+.progress-bar.red{background:var(--danger)}
+/* 柱状图 */
+.chart{display:flex;align-items:flex-end;gap:8px;height:120px;padding-top:20px}
+.chart-bar{flex:1;background:var(--accent);border-radius:4px 4px 0 0;position:relative;min-width:30px;transition:.3s}
+.chart-bar:hover{opacity:.8}
+.chart-bar .label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text-dim);white-space:nowrap}
+.chart-bar .value{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text)}
+/* Toast */
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;z-index:1000;animation:slideIn .3s}
+.toast.success{background:var(--success);color:#fff}
+.toast.error{background:var(--danger);color:#fff}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+/* 模态框 */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto}
+.modal h3{font-size:16px;margin-bottom:16px}
+.modal-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:20px}
+/* 响应式 */
+@media(max-width:768px){
+  .sidebar{display:none}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .photo-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<!-- 登录页 -->
+<div id="loginPage" class="login-page">
+  <div class="login-box">
+    <h2>🔐 管理后台</h2>
+    <p>AI校园写真自助机管理系统</p>
+    <input type="password" id="pwdInput" placeholder="请输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">登录</button>
+    <p id="loginErr" class="login-err">密码错误</p>
+  </div>
+</div>
+
+<!-- 主应用 -->
+<div id="appPage" class="app">
+  <!-- 侧边栏 -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h3>AI写真管理</h3>
+      <p>v1.0.3</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-page="dashboard"><span class="icon">📊</span> 仪表盘</div>
+      <div class="nav-item" data-page="server"><span class="icon">🖥️</span> 服务器</div>
+      <div class="nav-item" data-page="data"><span class="icon">📋</span> 数据管理</div>
+      <div class="nav-item" data-page="photos"><span class="icon">📷</span> 照片管理</div>
+      <div class="nav-item" data-page="content"><span class="icon">🎨</span> 内容配置</div>
+      <div class="nav-item" data-page="devices"><span class="icon">📱</span> 设备管理</div>
+      <div class="nav-item" data-page="settings"><span class="icon">⚙️</span> 系统设置</div>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="btn-logout" onclick="doLogout()">退出登录</button>
+    </div>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div id="statusDot" class="status-dot"></div>
+        <span id="statusText">运行中</span>
+      </div>
+      <div class="topbar-right">
+        <span id="uptimeTag" style="font-size:12px;color:var(--text-dim)"></span>
+        <button class="btn-refresh" onclick="refreshAll()">🔄 刷新</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- 仪表盘 -->
+      <div id="page-dashboard" class="page active">
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-num" id="sToday">0</div><div class="stat-label">今日拍照</div></div>
+          <div class="stat-card"><div class="stat-num" id="sTotal">0</div><div class="stat-label">总照片数</div></div>
+          <div class="stat-card"><div class="stat-num" id="sRegs">0</div><div class="stat-label">总登记数</div></div>
+          <div class="stat-card"><div class="stat-num" id="sOnline">0</div><div class="stat-label">在线设备</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-title">最近7天拍照趋势</div>
+            <div id="dailyChart" class="chart"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">风格分布</div>
+            <div id="styleChart" class="chart"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 服务器管理 -->
+      <div id="page-server" class="page">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num" id="cpuUsage">0%</div>
+            <div class="stat-label">CPU 使用率</div>
+            <div class="progress"><div id="cpuBar" class="progress-bar blue" style="width:0%"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="memUsage">0%</div>
+            <div class="stat-label">内存使用率</div>
+            <div class="progress"><div id="memBar" class="progress-bar green" style="width:0%"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="diskUsage">0%</div>
+            <div class="stat-label">磁盘使用率</div>
+            <div class="progress"><div id="diskBar" class="progress-bar yellow" style="width:0%"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="serverUp">0h</div>
+            <div class="stat-label">服务器运行时间</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-title">服务器信息</div>
+            <div id="serverInfo" style="font-size:13px;line-height:2"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">快捷操作</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <button class="btn btn-primary" onclick="restartService()">🔄 重启服务</button>
+              <button class="btn btn-primary" onclick="loadLogs()">📜 刷新日志</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">实时日志 <button class="btn btn-sm btn-primary" onclick="loadLogs()">刷新</button></div>
+          <div id="logArea" class="log-area" style="max-height:400px">加载中...</div>
+        </div>
+      </div>
+
+      <!-- 数据管理 -->
+      <div id="page-data" class="page">
+        <div class="card">
+          <div class="card-title">登记记录 <button class="btn btn-sm btn-primary" onclick="exportCSV('registrations')">📥 导出CSV</button></div>
+          <div class="search-box">
+            <input type="text" id="regSearch" placeholder="搜索姓名/班级/手机号..." onkeydown="if(event.key==='Enter')loadRegistrations()">
+            <button class="btn btn-primary" onclick="loadRegistrations()">搜索</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>姓名</th><th>班级</th><th>手机号</th><th>登记时间</th><th>状态</th></tr></thead>
+              <tbody id="regTable"></tbody>
+            </table>
+          </div>
+          <div id="regPagination" class="pagination"></div>
+        </div>
+      </div>
+
+      <!-- 照片管理 -->
+      <div id="page-photos" class="page">
+        <div class="card">
+          <div class="card-title">照片记录 <button class="btn btn-sm btn-primary" onclick="exportCSV('photos')">📥 导出CSV</button></div>
+          <div class="photo-grid" id="photoGrid"></div>
+          <div id="photoPagination" class="pagination"></div>
+        </div>
+      </div>
+
+      <!-- 内容配置 -->
+      <div id="page-content" class="page">
+        <div class="card">
+          <div class="card-title">AI风格管理 <button class="btn btn-sm btn-primary" onclick="showAddStyle()">+ 添加风格</button></div>
+          <div id="styleList" class="style-list"></div>
+        </div>
+      </div>
+
+      <!-- 设备管理 -->
+      <div id="page-devices" class="page">
+        <div class="card">
+          <div class="card-title">在线设备 <button class="btn btn-sm btn-danger" onclick="shutdownAll()">全部关机</button></div>
+          <div id="deviceGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px"></div>
+        </div>
+      </div>
+
+      <!-- 系统设置 -->
+      <div id="page-settings" class="page">
+        <div class="card">
+          <div class="card-title">系统配置</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div class="form-group">
+              <label>Mock模式（测试用）</label>
+              <label class="switch"><input type="checkbox" id="cfgMock" onchange="updateConfig('mockMode',this.checked)"><span class="slider"></span></label>
+            </div>
+            <div class="form-group">
+              <label>暂停自助机</label>
+              <label class="switch"><input type="checkbox" id="cfgPaused" onchange="updateConfig('paused',this.checked)"><span class="slider"></span></label>
+            </div>
+            <div class="form-group">
+              <label>API锁定</label>
+              <label class="switch"><input type="checkbox" id="cfgLocked" onchange="updateConfig('apiLocked',this.checked)"><span class="slider"></span></label>
+            </div>
+            <div class="form-group">
+              <label>空闲超时（秒）</label>
+              <input type="number" id="cfgTimeout" min="60" max="600" value="120" onchange="updateConfig('idleTimeout',parseInt(this.value))">
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">环境变量</div>
+          <div id="envList" style="font-size:13px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 模态框 -->
+<div id="modal" class="modal-overlay">
+  <div class="modal">
+    <h3 id="modalTitle">标题</h3>
+    <div id="modalContent"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button id="modalConfirm" class="btn btn-primary">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let pwd='';
+let currentPage='dashboard';
+let regPage=1,photoPage=1;
+
+// API调用
+function api(url,opt={}){
+  return fetch(url,{...opt,headers:{'X-Admin-Password':pwd,'Content-Type':'application/json',...(opt.headers||{})}}).then(r=>r.json())
+}
+
+// 登录
+function doLogin(){
+  const p=document.getElementById('pwdInput').value;
+  if(!p)return;
+  pwd=p;
+  api('/api/admin/status').then(r=>{
+    if(r.error){pwd='';document.getElementById('loginErr').style.display='block';return}
+    document.getElementById('loginPage').style.display='none';
+    document.getElementById('appPage').classList.add('show');
+    refreshAll();
+  }).catch(()=>{pwd='';document.getElementById('loginErr').style.display='block'})
+}
+
+function doLogout(){
+  pwd='';
+  document.getElementById('appPage').classList.remove('show');
+  document.getElementById('loginPage').style.display='flex';
+  document.getElementById('pwdInput').value='';
+}
+
+// 导航
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    const page=item.dataset.page;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+page).classList.add('active');
+    currentPage=page;
+    loadPage(page);
+  });
+});
+
+function loadPage(page){
+  if(page==='dashboard')loadDashboard();
+  else if(page==='server')loadServer();
+  else if(page==='data')loadRegistrations();
+  else if(page==='photos')loadPhotos();
+  else if(page==='content')loadStyles();
+  else if(page==='devices')loadDevices();
+  else if(page==='settings')loadSettings();
+}
+
+function refreshAll(){
+  api('/api/admin/status').then(r=>{
+    document.getElementById('statusDot').style.background=r.paused?'var(--warning)':'var(--success)';
+    document.getElementById('statusText').textContent=r.paused?'已暂停':'运行中';
+    document.getElementById('uptimeTag').textContent='运行 '+r.uptime;
+  });
+  loadPage(currentPage);
+}
+
+// 仪表盘
+function loadDashboard(){
+  api('/api/admin/stats').then(r=>{
+    document.getElementById('sToday').textContent=r.todayCount||0;
+    document.getElementById('sTotal').textContent=r.totalCount||0;
+    document.getElementById('sRegs').textContent=r.totalRegs||0;
+    // 每日趋势图
+    const daily=r.dailyStats||[];
+    const maxD=Math.max(...daily.map(d=>d.count),1);
+    document.getElementById('dailyChart').innerHTML=daily.slice(0,7).reverse().map(d=>{
+      const pct=Math.round(d.count/maxD*100);
+      return '<div class="chart-bar" style="height:'+pct+'%"><span class="value">'+d.count+'</span><span class="label">'+d.date.slice(5)+'</span></div>';
+    }).join('');
+    // 风格分布
+    const styles=r.styleStats||[];
+    const maxS=Math.max(...styles.map(s=>s.count),1);
+    document.getElementById('styleChart').innerHTML=styles.map(s=>{
+      const pct=Math.round(s.count/maxS*100);
+      return '<div class="chart-bar" style="height:'+pct+'%"><span class="value">'+s.count+'</span><span class="label">'+(s.style||'原版')+'</span></div>';
+    }).join('');
+  });
+  api('/api/admin/devices').then(r=>{
+    const online=(r.devices||[]).filter(d=>d.online).length;
+    document.getElementById('sOnline').textContent=online;
+  });
+}
+
+// 服务器管理
+function loadServer(){
+  api('/api/admin/server-info').then(r=>{
+    document.getElementById('cpuUsage').textContent=r.cpu.usage+'%';
+    document.getElementById('cpuBar').style.width=r.cpu.usage+'%';
+    document.getElementById('cpuBar').className='progress-bar '+(r.cpu.usage>80?'red':r.cpu.usage>50?'yellow':'blue');
+    document.getElementById('memUsage').textContent=r.memory.percent+'%';
+    document.getElementById('memBar').style.width=r.memory.percent+'%';
+    document.getElementById('memBar').className='progress-bar '+(r.memory.percent>80?'red':r.memory.percent>50?'yellow':'green');
+    document.getElementById('diskUsage').textContent=r.disk.percent;
+    document.getElementById('diskBar').style.width=parseInt(r.disk.percent)+'%';
+    document.getElementById('serverUp').textContent=r.uptime;
+    document.getElementById('serverInfo').innerHTML=
+      '<div>CPU: '+r.cpu.model+' ('+r.cpu.cores+'核)</div>'+
+      '<div>内存: '+r.memory.used+'MB / '+r.memory.total+'MB</div>'+
+      '<div>磁盘: '+r.disk.used+' / '+r.disk.total+'</div>'+
+      '<div>系统: '+r.platform+' '+r.hostname+'</div>'+
+      '<div>Node: '+r.nodeVersion+'</div>';
+  });
+  loadLogs();
+}
+
+function loadLogs(){
+  api('/api/admin/logs?lines=100').then(r=>{
+    document.getElementById('logArea').textContent=r.logs||'无日志';
+  });
+}
+
+function restartService(){
+  if(!confirm('确定要重启服务吗？'))return;
+  api('/api/admin/restart',{method:'POST'}).then(r=>{
+    toast(r.success?'服务已重启':'重启失败',r.success?'success':'error');
+  });
+}
+
+// 数据管理
+function loadRegistrations(){
+  const search=document.getElementById('regSearch').value;
+  api('/api/admin/registrations?page='+regPage+'&limit=50&search='+encodeURIComponent(search)).then(r=>{
+    const tbody=document.getElementById('regTable');
+    tbody.innerHTML=(r.registrations||[]).map(reg=>'<tr>'+
+      '<td>'+reg.id+'</td><td>'+reg.name+'</td><td>'+reg.class_name+'</td>'+
+      '<td>'+(reg.phone||'-')+'</td><td>'+reg.created_at+'</td>'+
+      '<td>'+(reg.used?'<span style="color:var(--success)">已使用</span>':'<span style="color:var(--warning)">未使用</span>')+'</td></tr>').join('');
+    renderPagination('regPagination',r.total,r.page,r.limit,page=>{regPage=page;loadRegistrations()});
+  });
+}
+
+// 照片管理
+function loadPhotos(){
+  api('/api/admin/photos-with-info?page='+photoPage+'&limit=50').then(r=>{
+    const grid=document.getElementById('photoGrid');
+    grid.innerHTML=(r.photos||[]).map(p=>'<div class="photo-card">'+
+      '<img src="/uploads/'+p.filename+'" alt="'+p.filename+'" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>%27\'">'+
+      '<div class="photo-info"><h4>'+(p.name||'未知用户')+'</h4>'+
+      '<p>'+(p.class_name||'')+' · '+(p.style||'原版')+'</p>'+
+      '<p>'+p.created_at+'</p></div>'+
+      '<div class="photo-actions"><button class="btn btn-sm btn-danger" onclick="deletePhoto(\''+p.filename+'\')">删除</button></div></div>').join('');
+    renderPagination('photoPagination',r.total,r.page,r.limit,page=>{photoPage=page;loadPhotos()});
+  });
+}
+
+function deletePhoto(filename){
+  if(!confirm('确定删除此照片？'))return;
+  api('/api/admin/photos/'+encodeURIComponent(filename),{method:'DELETE'}).then(r=>{
+    if(r.success){toast('已删除','success');loadPhotos()}
+  });
+}
+
+// 内容配置
+function loadStyles(){
+  api('/api/admin/styles').then(r=>{
+    document.getElementById('styleList').innerHTML=(r.styles||[]).map(s=>'<div class="style-item">'+
+      '<div class="style-info"><h4>'+s.name+' ('+s.id+')</h4><p>'+s.prompt.slice(0,50)+'...</p></div>'+
+      '<div class="style-actions"><button class="btn btn-sm" onclick="editStyle(\''+s.id+'\')">编辑</button>'+
+      '<button class="btn btn-sm btn-danger" onclick="deleteStyle(\''+s.id+'\')">删除</button></div></div>').join('');
+  });
+}
+
+function showAddStyle(){
+  document.getElementById('modalTitle').textContent='添加风格';
+  document.getElementById('modalContent').innerHTML=
+    '<div class="form-group"><label>风格ID</label><input id="styleId" placeholder="英文标识"></div>'+
+    '<div class="form-group"><label>风格名称</label><input id="styleName" placeholder="显示名称"></div>'+
+    '<div class="form-group"><label>提示词</label><textarea id="stylePrompt" placeholder="AI提示词"></textarea></div>';
+  document.getElementById('modalConfirm').onclick=()=>{
+    const id=document.getElementById('styleId').value;
+    const name=document.getElementById('styleName').value;
+    const prompt=document.getElementById('stylePrompt').value;
+    if(!id||!name||!prompt){toast('请填写所有字段','error');return}
+    api('/api/admin/styles',{method:'POST',body:JSON.stringify({id,name,prompt})}).then(r=>{
+      if(r.success){toast('已添加','success');closeModal();loadStyles()}
+    });
+  };
+  document.getElementById('modal').classList.add('show');
+}
+
+function editStyle(id){
+  api('/api/admin/styles').then(r=>{
+    const s=(r.styles||[]).find(x=>x.id===id);
+    if(!s)return;
+    document.getElementById('modalTitle').textContent='编辑风格';
+    document.getElementById('modalContent').innerHTML=
+      '<div class="form-group"><label>风格ID</label><input id="styleId" value="'+s.id+'" readonly style="opacity:.5"></div>'+
+      '<div class="form-group"><label>风格名称</label><input id="styleName" value="'+s.name+'"></div>'+
+      '<div class="form-group"><label>提示词</label><textarea id="stylePrompt">'+s.prompt+'</textarea></div>';
+    document.getElementById('modalConfirm').onclick=()=>{
+      const name=document.getElementById('styleName').value;
+      const prompt=document.getElementById('stylePrompt').value;
+      api('/api/admin/styles',{method:'POST',body:JSON.stringify({id,name,prompt})}).then(r=>{
+        if(r.success){toast('已更新','success');closeModal();loadStyles()}
+      });
+    };
+    document.getElementById('modal').classList.add('show');
+  });
+}
+
+function deleteStyle(id){
+  if(!confirm('确定删除此风格？'))return;
+  api('/api/admin/styles/'+id,{method:'DELETE'}).then(r=>{
+    if(r.success){toast('已删除','success');loadStyles()}
+  });
+}
+
+// 设备管理
+function loadDevices(){
+  api('/api/admin/devices').then(r=>{
+    document.getElementById('deviceGrid').innerHTML=(r.devices||[]).map(d=>'<div class="card">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
+      '<div style="width:10px;height:10px;border-radius:50%;background:'+(d.online?'var(--success)':'var(--text-muted)')+'"></div>'+
+      '<strong>'+(d.name||d.id)+'</strong></div>'+
+      '<div style="font-size:12px;color:var(--text-dim);line-height:1.8">'+
+      '<div>ID: '+d.id+'</div>'+
+      '<div>页面: '+(d.page||'-')+'</div>'+
+      '<div>版本: '+(d.version||'-')+'</div>'+
+      '<div>最后心跳: '+(d.lastSeen?new Date(d.lastSeen).toLocaleTimeString():'-')+'</div></div>'+
+      '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="shutdownDevice(\''+d.id+'\')">关机</button></div></div>').join('');
+  });
+}
+
+function shutdownDevice(id){
+  if(!confirm('确定向此设备发送关机命令？'))return;
+  api('/api/admin/devices/'+encodeURIComponent(id)+'/shutdown',{method:'POST'}).then(r=>{
+    if(r.success){toast('已发送关机命令','success');loadDevices()}
+  });
+}
+
+function shutdownAll(){
+  if(!confirm('确定向所有设备发送关机命令？'))return;
+  api('/api/admin/devices/shutdown-all',{method:'POST'}).then(r=>{
+    toast('已发送 '+r.count+' 个关机命令','success');
+  });
+}
+
+// 系统设置
+function loadSettings(){
+  api('/api/admin/config').then(r=>{
+    document.getElementById('cfgMock').checked=r.mockMode;
+    document.getElementById('cfgPaused').checked=r.paused;
+    document.getElementById('cfgLocked').checked=r.apiLocked;
+    document.getElementById('cfgTimeout').value=r.idleTimeout||120;
+  });
+  api('/api/admin/env').then(r=>{
+    const env=r.env||{};
+    document.getElementById('envList').innerHTML=Object.entries(env).map(([k,v])=>
+      '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">'+
+      '<span style="color:var(--accent)">'+k+'</span><span>'+v+'</span></div>').join('');
+  });
+}
+
+function updateConfig(key,value){
+  api('/api/admin/config',{method:'POST',body:JSON.stringify({[key]:value})}).then(r=>{
+    if(r.success)toast('已更新','success');
+  });
+}
+
+// 工具函数
+function renderPagination(id,total,page,limit,callback){
+  const pages=Math.ceil(total/limit);
+  let html='<button '+(page<=1?'disabled':'')+' onclick="window._pag'+id+'('+(page-1)+')">上一页</button>';
+  for(let i=Math.max(1,page-2);i<=Math.min(pages,page+2);i++){
+    html+='<button class="'+(i===page?'active':'')+'" onclick="window._pag'+id+'('+i+')">'+i+'</button>';
+  }
+  html+='<button '+(page>=pages?'disabled':'')+' onclick="window._pag'+id+'('+(page+1)+')">下一页</button>';
+  html+='<span style="font-size:12px;color:var(--text-dim)">共 '+total+' 条</span>';
+  document.getElementById(id).innerHTML=html;
+  window['_pag'+id]=callback;
+}
+
+function exportCSV(type){
+  window.open('/api/admin/export/csv?type='+type+'&token='+encodeURIComponent(pwd));
+}
+
+function toast(msg,type='success'){
+  const el=document.createElement('div');
+  el.className='toast '+type;
+  el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),3000);
+}
+
+function closeModal(){
+  document.getElementById('modal').classList.remove('show');
+}
+
+// 自动刷新
+setInterval(()=>{
+  if(pwd && currentPage==='dashboard')loadDashboard();
+},30000);
+</script>
+</body>
+</html>`;
+}
