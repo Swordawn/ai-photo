@@ -77,6 +77,10 @@ if (!existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir))
 
+// 服务 public 目录的静态文件（边框图片等）
+const publicDir = join(__dirname, 'public')
+app.use(express.static(publicDir))
+
 // 生产环境：服务前端构建文件
 const distDir = join(__dirname, 'dist')
 if (existsSync(distDir)) {
