@@ -80,10 +80,13 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // 清除登记
+  // 清除登记（标记为已使用，防止轮询再次拉出）
   const clearRegistration = useCallback(() => {
+    if (registration) {
+      apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
+    }
     setRegistration(null)
-  }, [])
+  }, [registration])
 
   // 扫码登记轮询（首页时每5秒检查新登记）
   useEffect(() => {
