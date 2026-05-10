@@ -1,8 +1,10 @@
 import { apiFetch } from '../apiBase'
 
 const API_KEY = import.meta.env.VITE_DASHSCOPE_KEY as string
-// wan2.7-image 使用 OpenAI 兼容的 chat completions 格式
-const CHAT_URL = '/dashscope/compatible-mode/v1/chat/completions'
+const SUBMIT_URL = '/dashscope/api/v1/services/aigc/image-generation/generation'
+const TASK_URL = '/dashscope/api/v1/tasks'
+const POLL_INTERVAL = 3000
+const MAX_WAIT = 90000
 
 // 风格提示词映射
 const stylePrompts: Record<string, string> = {
@@ -35,20 +37,26 @@ export async function generateAIImage(
   const prompt = stylePrompts[styleId] || stylePrompts['guofeng']
   console.log('[generate] 风格:', styleId, '→ prompt:', prompt.slice(0, 30) + '...')
 
-  // wan2.7-image 使用 OpenAI 兼容格式
+  // Step 1: 提交生成任务
   const requestBody = {
     model: 'wan2.7-image',
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: photoBase64 } },
-          { type: 'text', text: prompt },
-        ],
-      },
-    ],
+    input: {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { image: photoBase64 },
+            { text: prompt },
+          ],
+        },
+      ],
+    },
+    parameters: {
+      size: '1024*1024',
+      n: 1,
+    },
   }
-  console.log('[generate] 提交任务到:', CHAT_URL)
+  console.log('[generate] 提交任务到:', SUBMIT_URL)
 
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
@@ -58,53 +66,84 @@ export async function generateAIImage(
   const onExternalAbort = () => timeoutController.abort()
   signal?.addEventListener('abort', onExternalAbort)
 
-  let chatRes: Response
+  let submitRes: Response
   try {
-    chatRes = await apiFetch(CHAT_URL, {
+    submitRes = await apiFetch(SUBMIT_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${API_KEY}`,
         'Content-Type': 'application/json',
+        'X-DashScope-Async': 'enable',
       },
       body: JSON.stringify(requestBody),
       signal: timeoutController.signal,
     })
   } catch (err) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    throw new Error('请求超时（30秒），请检查网络后重试')
+    throw new Error('提交任务超时（30秒），请检查网络后重试')
   } finally {
     clearTimeout(timeoutId)
     signal?.removeEventListener('abort', onExternalAbort)
   }
 
-  console.log('[generate] 响应状态:', chatRes.status)
+  console.log('[generate] 提交响应状态:', submitRes.status)
 
-  if (!chatRes.ok) {
-    const errText = await chatRes.text()
-    console.error('[generate] 请求失败:', errText)
-    throw new Error(`AI生成失败: ${chatRes.status} - ${errText}`)
+  if (!submitRes.ok) {
+    const errText = await submitRes.text()
+    console.error('[generate] 提交失败:', errText)
+    throw new Error(`提交任务失败: ${submitRes.status} - ${errText}`)
   }
 
-  const chatData = await chatRes.json()
-  console.log('[generate] 响应:', chatData)
+  const submitData = await submitRes.json()
+  console.log('[generate] 提交响应:', submitData)
 
-  // 从响应中提取图片URL
-  const content = chatData.choices?.[0]?.message?.content
-  if (!content) throw new Error('AI未返回结果')
+  const taskId = submitData.output?.task_id
+  if (!taskId) throw new Error('未获取到 task_id')
+  console.log('[generate] 任务ID:', taskId)
 
-  // content 可能是字符串（包含URL）或数组
-  if (typeof content === 'string') {
-    // 尝试从文本中提取URL
-    const urlMatch = content.match(/https?:\/\/[^\s\]]+/)
-    if (urlMatch) return urlMatch[0]
-    throw new Error('AI返回格式异常')
+  // Step 2: 轮询任务状态
+  const startTime = Date.now()
+  let consecutiveErrors = 0
+
+  while (Date.now() - startTime < MAX_WAIT) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL))
+
+    console.log('[generate] 轮询中...')
+
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+
+    const pollRes = await apiFetch(`${TASK_URL}/${taskId}`, {
+      headers: { 'Authorization': `Bearer ${API_KEY}` },
+      signal,
+    })
+
+    if (!pollRes.ok) {
+      consecutiveErrors++
+      console.warn('[generate] 轮询HTTP错误:', pollRes.status, `(连续第${consecutiveErrors}次)`)
+      if (consecutiveErrors >= 3) {
+        throw new Error(`轮询连续失败${consecutiveErrors}次 (HTTP ${pollRes.status})，请重试`)
+      }
+      continue
+    }
+
+    consecutiveErrors = 0
+    const pollData = await pollRes.json()
+    const status = pollData.output?.task_status
+    console.log('[generate] 任务状态:', status)
+
+    if (status === 'SUCCEEDED') {
+      const resultUrl = pollData.output?.results?.[0]?.url
+      console.log('[generate] 生成完成! url:', resultUrl?.slice(0, 80))
+      if (resultUrl) return resultUrl
+      throw new Error('任务成功但未返回结果URL')
+    }
+
+    if (status === 'FAILED') {
+      const msg = pollData.output?.message || pollData.output?.code || '未知错误'
+      console.error('[generate] 任务失败:', msg)
+      throw new Error(`AI生成失败: ${msg}`)
+    }
   }
 
-  // 如果是数组格式
-  if (Array.isArray(content)) {
-    const imgPart = content.find((p: any) => p.type === 'image_url')
-    if (imgPart?.image_url?.url) return imgPart.image_url.url
-  }
-
-  throw new Error('AI未返回图片')
+  throw new Error('AI生成超时（90秒），请重试')
 }
