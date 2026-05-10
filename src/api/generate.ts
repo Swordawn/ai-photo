@@ -4,7 +4,17 @@ const API_KEY = import.meta.env.VITE_DASHSCOPE_KEY as string
 const SUBMIT_URL = '/dashscope/api/v1/services/aigc/image-generation/generation'
 const TASK_URL = '/dashscope/api/v1/tasks'
 const POLL_INTERVAL = 3000
-const MAX_WAIT = 60000
+const MAX_WAIT = 90000
+
+// 风格提示词映射
+const stylePrompts: Record<string, string> = {
+  'guofeng': '转换为古风中国画风格，水墨质感，古典优雅，保持人物面部清晰',
+  'guochao': '转换为国潮艺术风格，鲜艳色彩，现代中国风，潮流插画感',
+  'jiaopian': '转换为复古胶片摄影风格，暖色调，颗粒质感，怀旧氛围',
+  'qingxin': '转换为小清新风格，明亮柔和色调，自然光线，清新淡雅',
+  'youhua': '转换为油画风格，厚重笔触质感，丰富色彩层次，艺术感强',
+  'sumiao': '转换为铅笔素描风格，黑白线条，细腻明暗关系，写实素描',
+}
 
 export async function generateAIImage(
   photoBase64: string,
@@ -24,25 +34,19 @@ export async function generateAIImage(
     throw new Error('API Key 未配置，请在 .env 中设置 VITE_DASHSCOPE_KEY')
   }
 
-  // 风格映射
-  const styleMap: Record<string, number> = {
-    'guofeng': 5,   // 古风
-    'guochao': 5,   // 国潮
-    'jiaopian': 0,  // 胶片风
-    'qingxin': 1,   // 小清新
-    'youhua': 3,    // 油画
-    'sumiao': 6,    // 素描
-  }
-
-  const styleIndex = styleMap[styleId] ?? 0
-  console.log('[generate] 风格:', styleId, '→ style_index:', styleIndex)
+  const prompt = stylePrompts[styleId] || stylePrompts['guofeng']
+  console.log('[generate] 风格:', styleId, '→ prompt:', prompt.slice(0, 30) + '...')
 
   // Step 1: 提交生成任务
   const requestBody = {
-    model: 'wanx-style-repaint-v1',
+    model: 'wan2.7-image',
     input: {
       image_url: photoBase64,
-      style_index: styleIndex,
+      prompt: prompt,
+    },
+    parameters: {
+      size: '1024*1024',
+      n: 1,
     },
   }
   console.log('[generate] 提交任务到:', SUBMIT_URL)
@@ -52,7 +56,6 @@ export async function generateAIImage(
   // 30秒超时
   const timeoutController = new AbortController()
   const timeoutId = setTimeout(() => timeoutController.abort(), 30000)
-  // 外部 abort 时同步取消超时 controller
   const onExternalAbort = () => timeoutController.abort()
   signal?.addEventListener('abort', onExternalAbort)
 
@@ -91,9 +94,8 @@ export async function generateAIImage(
   if (!taskId) throw new Error('未获取到 task_id')
   console.log('[generate] 任务ID:', taskId)
 
-  // Step 2: 轮询任务状态（每3秒，最多60秒）
+  // Step 2: 轮询任务状态
   const startTime = Date.now()
-
   let consecutiveErrors = 0
 
   while (Date.now() - startTime < MAX_WAIT) {
@@ -118,13 +120,11 @@ export async function generateAIImage(
     }
 
     consecutiveErrors = 0
-
     const pollData = await pollRes.json()
     const status = pollData.output?.task_status
     console.log('[generate] 任务状态:', status)
 
     if (status === 'SUCCEEDED') {
-      // 官方文档：结果在 output.results[0].url
       const resultUrl = pollData.output?.results?.[0]?.url
       console.log('[generate] 生成完成! url:', resultUrl?.slice(0, 80))
       if (resultUrl) return resultUrl
@@ -136,9 +136,7 @@ export async function generateAIImage(
       console.error('[generate] 任务失败:', msg)
       throw new Error(`AI生成失败: ${msg}`)
     }
-
-    // PENDING / RUNNING → 继续轮询
   }
 
-  throw new Error('AI生成超时（60秒），请重试')
+  throw new Error('AI生成超时（90秒），请重试')
 }
