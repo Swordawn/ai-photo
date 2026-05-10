@@ -25,7 +25,7 @@ const INITIAL_STATE: AppState = {
   capturedPhoto: null,
   selectedBg: null,
   selectedStyle: null,
-  selectedFrame: null,
+  selectedFrame: 'frame1',  // 默认选中第一个边框
   resultImage: null,
   mockMode: false,
 }

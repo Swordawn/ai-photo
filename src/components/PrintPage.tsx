@@ -30,23 +30,37 @@ export default function PrintPage({
   const handleDownload = useCallback(async () => {
     setIsDownloading(true)
     try {
-      // 加载图片
-      const loadImage = (src: string): Promise<HTMLImageElement> => {
+      // 通过代理加载图片（避免CORS问题）
+      const loadImage = async (src: string): Promise<HTMLImageElement> => {
+        // 如果是base64或blob，直接加载
+        if (src.startsWith('data:') || src.startsWith('blob:')) {
+          return new Promise((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => resolve(img)
+            img.onerror = reject
+            img.src = src
+          })
+        }
+        // 远程URL通过代理加载
+        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
+        const resp = await fetch(proxyUrl)
+        if (!resp.ok) throw new Error(`代理加载失败: ${resp.status}`)
+        const blob = await resp.blob()
+        const blobUrl = URL.createObjectURL(blob)
         return new Promise((resolve, reject) => {
           const img = new Image()
-          img.crossOrigin = 'anonymous'
-          img.onload = () => resolve(img)
-          img.onerror = reject
-          img.src = src
+          img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img) }
+          img.onerror = (e) => { URL.revokeObjectURL(blobUrl); reject(e) }
+          img.src = blobUrl
         })
       }
 
+      // 加载照片（通过代理）
+      const photo = await loadImage(resultImage)
+
       // 如果有边框，合成边框后下载
       if (frameSrc) {
-        const [photo, frame] = await Promise.all([
-          loadImage(resultImage),
-          loadImage(frameSrc)
-        ])
+        const frame = await loadImage(frameSrc)
 
         const canvas = document.createElement('canvas')
         canvas.width = frame.naturalWidth || frame.width
@@ -84,18 +98,26 @@ export default function PrintPage({
           setIsDownloading(false)
         }, 'image/jpeg', 0.95)
       } else {
-        // 没有边框，直接下载原图
-        const resp = await fetch(resultImage)
-        const blob = await resp.blob()
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `AI校园写真_${Date.now()}.jpg`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-        setIsDownloading(false)
+        // 没有边框，直接下载
+        photo.crossOrigin = 'anonymous'
+        const canvas = document.createElement('canvas')
+        canvas.width = photo.naturalWidth || photo.width
+        canvas.height = photo.naturalHeight || photo.height
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(photo, 0, 0)
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `AI校园写真_${Date.now()}.jpg`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+          }
+          setIsDownloading(false)
+        }, 'image/jpeg', 0.95)
       }
     } catch (err) {
       console.error('下载失败:', err)
