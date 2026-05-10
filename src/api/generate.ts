@@ -37,12 +37,19 @@ export async function generateAIImage(
   const prompt = stylePrompts[styleId] || stylePrompts['guofeng']
   console.log('[generate] 风格:', styleId, '→ prompt:', prompt.slice(0, 30) + '...')
 
-  // Step 1: 提交生成任务
+  // Step 1: 提交生成任务（wan2.7-image 使用 messages 格式）
   const requestBody = {
     model: 'wan2.7-image',
     input: {
-      image_url: photoBase64,
-      prompt: prompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { image: photoBase64 },
+            { text: prompt },
+          ],
+        },
+      ],
     },
     parameters: {
       size: '1024*1024',
