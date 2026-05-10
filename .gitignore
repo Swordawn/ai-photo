@@ -27,6 +27,7 @@ dist-ssr
 # Project
 uploads/
 .tunnel-url
+cdn-assets/
 *.exe
 *.msi
 *.zip

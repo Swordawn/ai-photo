@@ -1,7 +1,4 @@
-import xiangkuang1 from '../assets/xiangkuang1.png'
-import xiangkuang2 from '../assets/xiangkuang2.png'
-import xiangkuang3 from '../assets/xiangkuang3.png'
-import xiangkuang4 from '../assets/xiangkuang4.png'
+const CDN = 'https://ai-photo-cdn.pages.dev'
 
 export interface Frame {
   id: string
@@ -10,10 +7,10 @@ export interface Frame {
 }
 
 export const FRAMES: Frame[] = [
-  { id: 'frame1', name: '相框一', src: xiangkuang1 },
-  { id: 'frame2', name: '相框二', src: xiangkuang2 },
-  { id: 'frame3', name: '相框三', src: xiangkuang3 },
-  { id: 'frame4', name: '相框四', src: xiangkuang4 },
+  { id: 'frame1', name: '相框一', src: `${CDN}/frames/xiangkuang1.png` },
+  { id: 'frame2', name: '相框二', src: `${CDN}/frames/xiangkuang2.png` },
+  { id: 'frame3', name: '相框三', src: `${CDN}/frames/xiangkuang3.png` },
+  { id: 'frame4', name: '相框四', src: `${CDN}/frames/xiangkuang4.png` },
 ]
 
 export function getFrameSrc(frameId: string): string {
