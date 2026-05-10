@@ -165,14 +165,22 @@ export default function App() {
     console.log('[handleGenerate] 开始生成, styleId:', styleId)
 
     try {
-      // AI生成图片（返回远程URL）
-      const aiResult = await generateAIImage(
-        state.capturedPhoto,
-        styleId,
-        state.mockMode,
-        signal
-      )
-      console.log('[handleGenerate] AI生成完成, url:', aiResult?.slice(0, 80))
+      let finalImage: string
+
+      if (styleId === 'original') {
+        // 原版：直接用拍摄的照片，不经过AI处理
+        console.log('[handleGenerate] 原版模式，跳过AI处理')
+        finalImage = state.capturedPhoto
+      } else {
+        // AI生成图片（返回远程URL）
+        finalImage = await generateAIImage(
+          state.capturedPhoto,
+          styleId,
+          state.mockMode,
+          signal
+        )
+        console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
+      }
 
       // 保存照片与登记关联
       const filename = `photo_${Date.now()}.jpg`
@@ -186,10 +194,9 @@ export default function App() {
         })
       }).catch(() => {})
 
-      // 跳过前端合成，直接用AI生成的URL
       console.log('[handleGenerate] 跳转到结果页')
-      setResultImage(aiResult)
-      setServerUrl(aiResult)
+      setResultImage(finalImage)
+      setServerUrl(finalImage)
       setErrorMsg(null)
 
       // 标记登记已使用

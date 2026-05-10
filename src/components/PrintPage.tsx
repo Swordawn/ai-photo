@@ -30,22 +30,79 @@ export default function PrintPage({
   const handleDownload = useCallback(async () => {
     setIsDownloading(true)
     try {
-      const resp = await fetch(resultImage)
-      const blob = await resp.blob()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `AI校园写真_${Date.now()}.jpg`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-    } catch {
+      // 加载图片
+      const loadImage = (src: string): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          img.onload = () => resolve(img)
+          img.onerror = reject
+          img.src = src
+        })
+      }
+
+      // 如果有边框，合成边框后下载
+      if (frameSrc) {
+        const [photo, frame] = await Promise.all([
+          loadImage(resultImage),
+          loadImage(frameSrc)
+        ])
+
+        const canvas = document.createElement('canvas')
+        canvas.width = frame.naturalWidth || frame.width
+        canvas.height = frame.naturalHeight || frame.height
+        const ctx = canvas.getContext('2d')!
+
+        // 绘制照片（cover模式）
+        const frameAspect = canvas.width / canvas.height
+        const photoAspect = (photo.naturalWidth || photo.width) / (photo.naturalHeight || photo.height)
+        let sx = 0, sy = 0, sw = photo.naturalWidth || photo.width, sh = photo.naturalHeight || photo.height
+        if (photoAspect > frameAspect) {
+          sw = sh * frameAspect
+          sx = ((photo.naturalWidth || photo.width) - sw) / 2
+        } else {
+          sh = sw / frameAspect
+          sy = ((photo.naturalHeight || photo.height) - sh) / 2
+        }
+        ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
+
+        // 叠加边框
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
+
+        // 导出下载
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `AI校园写真_${Date.now()}.jpg`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+          }
+          setIsDownloading(false)
+        }, 'image/jpeg', 0.95)
+      } else {
+        // 没有边框，直接下载原图
+        const resp = await fetch(resultImage)
+        const blob = await resp.blob()
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `AI校园写真_${Date.now()}.jpg`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        setIsDownloading(false)
+      }
+    } catch (err) {
+      console.error('下载失败:', err)
       alert('下载失败，请重试')
-    } finally {
       setIsDownloading(false)
     }
-  }, [resultImage])
+  }, [resultImage, frameSrc])
 
   return (
     <div style={{ height: '100vh', display: 'flex', backgroundColor: '#fff' }}>

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { FRAMES, getFrameSrc } from '../data/frames'
 
 const STYLES = [
+  { id: 'original', name: '原版', isOriginal: true },
   { id: 'guofeng', name: '古风' },
   { id: 'guochao', name: '国潮' },
   { id: 'jiaopian', name: '胶片风' },
