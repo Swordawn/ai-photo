@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { getFrameSrc } from '../data/frames'
+import { apiFetch } from '../apiBase'
 
 interface Props {
   resultImage: string
@@ -28,44 +29,94 @@ export default function PrintPage({
   }, [countdown, onBack])
 
   const handleDownload = useCallback(async () => {
+    console.log('[Download] ========== 开始下载流程 ==========')
+    console.log('[Download] resultImage:', resultImage ? resultImage.slice(0, 100) + '...' : 'NULL')
+    console.log('[Download] selectedFrame prop:', selectedFrame)
+    console.log('[Download] frameSrc 计算值:', frameSrc)
+    console.log('[Download] resultImage 类型:', resultImage?.startsWith('data:') ? 'base64' : resultImage?.startsWith('blob:') ? 'blob' : 'remote URL')
+
     setIsDownloading(true)
     try {
       // 通过代理加载图片（避免CORS问题）
-      const loadImage = async (src: string): Promise<HTMLImageElement> => {
+      const loadImage = async (src: string, label: string): Promise<HTMLImageElement> => {
+        console.log(`[Download][${label}] 加载图片:`, src.slice(0, 100))
+
         // 如果是base64或blob，直接加载
         if (src.startsWith('data:') || src.startsWith('blob:')) {
+          console.log(`[Download][${label}] 直接加载 (data/blob)`)
           return new Promise((resolve, reject) => {
             const img = new Image()
-            img.onload = () => resolve(img)
-            img.onerror = reject
+            img.onload = () => {
+              console.log(`[Download][${label}] 加载成功, 尺寸: ${img.naturalWidth}x${img.naturalHeight}`)
+              resolve(img)
+            }
+            img.onerror = (e) => {
+              console.error(`[Download][${label}] 加载失败:`, e)
+              reject(new Error(`${label} 图片加载失败`))
+            }
             img.src = src
           })
         }
+
         // 远程URL通过代理加载
         const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
-        const resp = await fetch(proxyUrl)
-        if (!resp.ok) throw new Error(`代理加载失败: ${resp.status}`)
+        console.log(`[Download][${label}] 通过代理加载, proxyUrl:`, proxyUrl.slice(0, 120))
+
+        const resp = await apiFetch(proxyUrl)
+        console.log(`[Download][${label}] 代理响应状态: ${resp.status} ${resp.statusText}`)
+
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => '无法读取错误信息')
+          console.error(`[Download][${label}] 代理返回错误:`, errorText.slice(0, 200))
+          throw new Error(`代理加载${label}失败: HTTP ${resp.status}`)
+        }
+
         const blob = await resp.blob()
+        console.log(`[Download][${label}] 获取blob, size=${blob.size}, type=${blob.type}`)
+
+        if (blob.size === 0) {
+          throw new Error(`代理返回的${label}图片为空 (blob size=0)`)
+        }
+
         const blobUrl = URL.createObjectURL(blob)
+        console.log(`[Download][${label}] 创建blobUrl:`, blobUrl)
+
         return new Promise((resolve, reject) => {
           const img = new Image()
-          img.onload = () => { URL.revokeObjectURL(blobUrl); resolve(img) }
-          img.onerror = (e) => { URL.revokeObjectURL(blobUrl); reject(e) }
+          img.onload = () => {
+            console.log(`[Download][${label}] blob图片加载成功, 尺寸: ${img.naturalWidth}x${img.naturalHeight}`)
+            URL.revokeObjectURL(blobUrl)
+            resolve(img)
+          }
+          img.onerror = (e) => {
+            console.error(`[Download][${label}] blob图片加载失败:`, e)
+            URL.revokeObjectURL(blobUrl)
+            reject(new Error(`${label} blob图片加载失败`))
+          }
           img.src = blobUrl
         })
       }
 
-      // 加载照片（通过代理）
-      const photo = await loadImage(resultImage)
+      // 加载照片
+      console.log('[Download] 步骤1: 加载照片...')
+      const photo = await loadImage(resultImage, '照片')
+      console.log('[Download] 照片加载完成, 尺寸:', photo.naturalWidth, 'x', photo.naturalHeight)
 
       // 如果有边框，合成边框后下载
       if (frameSrc) {
-        const frame = await loadImage(frameSrc)
+        console.log('[Download] 步骤2: 有边框, 加载边框图片...')
+        const frame = await loadImage(frameSrc, '边框')
+        console.log('[Download] 边框加载完成, 尺寸:', frame.naturalWidth, 'x', frame.naturalHeight)
 
         const canvas = document.createElement('canvas')
         canvas.width = frame.naturalWidth || frame.width
         canvas.height = frame.naturalHeight || frame.height
-        const ctx = canvas.getContext('2d')!
+        const ctx = canvas.getContext('2d')
+        console.log('[Download] 步骤3: Canvas创建, canvas尺寸:', canvas.width, 'x', canvas.height)
+
+        if (!ctx) {
+          throw new Error('无法创建Canvas 2D上下文')
+        }
 
         // 绘制照片（cover模式）
         const frameAspect = canvas.width / canvas.height
@@ -78,53 +129,76 @@ export default function PrintPage({
           sh = sw / frameAspect
           sy = ((photo.naturalHeight || photo.height) - sh) / 2
         }
+        console.log('[Download] 步骤4: 绘制照片, 裁剪参数:', { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) })
+
         ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
+        console.log('[Download] 照片绘制完成')
 
         // 叠加边框
         ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
+        console.log('[Download] 边框叠加完成')
 
-        // 导出下载
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `AI校园写真_${Date.now()}.jpg`
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(url)
-          }
-          setIsDownloading(false)
-        }, 'image/jpeg', 0.95)
+        // 导出下载 - 使用 toDataURL 替代 toBlob，更可靠
+        console.log('[Download] 步骤5: 导出图片...')
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+          console.log('[Download] toDataURL 成功, dataUrl长度:', dataUrl.length, '前50字符:', dataUrl.slice(0, 50))
+
+          const link = document.createElement('a')
+          link.href = dataUrl
+          link.download = `AI校园写真_${Date.now()}.jpg`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          console.log('[Download] ========== 下载触发成功（有边框）==========')
+        } catch (canvasErr) {
+          console.error('[Download] canvas.toDataURL 失败:', canvasErr)
+          console.error('[Download] canvas tainted?', (() => { try { canvas.toDataURL(); return false } catch { return true } })())
+          throw new Error(`Canvas导出失败: ${canvasErr instanceof Error ? canvasErr.message : String(canvasErr)}`)
+        }
+        setIsDownloading(false)
       } else {
-        // 没有边框，直接下载
-        photo.crossOrigin = 'anonymous'
+        console.log('[Download] 步骤2: 无边框, 直接下载原图')
         const canvas = document.createElement('canvas')
         canvas.width = photo.naturalWidth || photo.width
         canvas.height = photo.naturalHeight || photo.height
-        const ctx = canvas.getContext('2d')!
+        const ctx = canvas.getContext('2d')
+        console.log('[Download] Canvas尺寸:', canvas.width, 'x', canvas.height)
+
+        if (!ctx) {
+          throw new Error('无法创建Canvas 2D上下文')
+        }
+
         ctx.drawImage(photo, 0, 0)
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `AI校园写真_${Date.now()}.jpg`
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(url)
-          }
-          setIsDownloading(false)
-        }, 'image/jpeg', 0.95)
+        console.log('[Download] 照片绘制完成')
+
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+          console.log('[Download] toDataURL 成功, 长度:', dataUrl.length)
+
+          const link = document.createElement('a')
+          link.href = dataUrl
+          link.download = `AI校园写真_${Date.now()}.jpg`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          console.log('[Download] ========== 下载触发成功（无边框）==========')
+        } catch (canvasErr) {
+          console.error('[Download] canvas.toDataURL 失败:', canvasErr)
+          throw new Error(`Canvas导出失败: ${canvasErr instanceof Error ? canvasErr.message : String(canvasErr)}`)
+        }
+        setIsDownloading(false)
       }
     } catch (err) {
-      console.error('下载失败:', err)
+      console.error('[Download] ========== 下载流程异常 ==========')
+      console.error('[Download] 错误类型:', err?.constructor?.name)
+      console.error('[Download] 错误信息:', err instanceof Error ? err.message : String(err))
+      console.error('[Download] 完整错误:', err)
+      console.error('[Download] 当前状态 - selectedFrame:', selectedFrame, 'frameSrc:', frameSrc)
       alert('下载失败，请重试')
       setIsDownloading(false)
     }
-  }, [resultImage, frameSrc])
+  }, [resultImage, frameSrc, selectedFrame])
 
   return (
     <div style={{ height: '100vh', display: 'flex', backgroundColor: '#fff' }}>
