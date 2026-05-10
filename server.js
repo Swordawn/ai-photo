@@ -185,7 +185,7 @@ app.all('/dashscope/*', async (req, res) => {
     const headers = { ...req.headers, host: 'dashscope.aliyuncs.com' }
     delete headers['origin']
     delete headers['referer']
-    const fetchOptions: RequestInit = {
+    const fetchOptions = {
       method: req.method,
       headers,
     }
