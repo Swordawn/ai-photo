@@ -101,6 +101,9 @@ export default function App() {
               if (prev && prev.id === data.registration.id) return prev
               return data.registration
             })
+          } else {
+            // 数据库无未使用登记，清除本地状态
+            setRegistration(null)
           }
         })
         .catch(() => {})
@@ -110,13 +113,18 @@ export default function App() {
     return () => clearInterval(timer)
   }, [state.page])
 
-  // 登记超时：90秒无操作自动清除
+  // 登记超时：90秒无操作自动清除（同时标记数据库已使用）
   useEffect(() => {
     if (!registration) return
     const timeout = setTimeout(() => {
+      apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
       setRegistration(null)
     }, 90000)
-    return () => clearTimeout(timeout)
+    return () => {
+      clearTimeout(timeout)
+      // cleanup时也标记已使用（导航离开、新登记替换等场景）
+      apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
+    }
   }, [registration])
 
   // 设备心跳（每30秒上报）

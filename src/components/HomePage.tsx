@@ -39,24 +39,21 @@ export default function HomePage({ onStart: _, onCamera, registration, onClearRe
     return () => clearInterval(timer)
   }, [])
 
-  // 登记倒计时
+  // 登记倒计时（纯展示，超时由 App.tsx 统一处理）
   useEffect(() => {
     if (!registration) { setCountdown(90); return }
     setCountdown(90)
     const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          onClearRegistration()
-          return 90
-        }
-        return prev - 1
-      })
+      setCountdown(prev => prev <= 1 ? 0 : prev - 1)
     }, 1000)
     return () => clearInterval(timer)
-  }, [registration, onClearRegistration])
+  }, [registration])
 
-  // 动态 QR 码 URL
-  const qrUrl = `${window.location.protocol}//${window.location.host}/register`
+  // 动态 QR 码 URL（优先使用公网域名）
+  const PUBLIC_HOST = import.meta.env.VITE_PUBLIC_HOST
+  const qrUrl = PUBLIC_HOST
+    ? `https://${PUBLIC_HOST}/register`
+    : `${window.location.protocol}//${window.location.host}/register`
 
   return (
     <div style={{

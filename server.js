@@ -883,7 +883,8 @@ button:active{transform:scale(.98)}
 </div>
 <div class="card done" id="doneCard" style="display:none">
 <h2>✅ 登记成功！</h2>
-<p>请前往自助机拍照</p>
+<p id="doneMsg">请在 <strong id="cdNum">90</strong> 秒内前往自助机拍照</p>
+<p id="expiredMsg" style="display:none;color:#c62828;font-weight:600;font-size:15px;margin-top:8px">登记已过期，请重新扫码登记</p>
 </div>
 <script>
 document.getElementById('regForm').onsubmit=function(e){
@@ -895,12 +896,14 @@ if(!name||!className){showMsg('请填写姓名和班级','err');return}
 fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,className:className,phone:phone})})
 .then(function(r){return r.json()})
 .then(function(d){
-if(d.success){document.getElementById('formCard').style.display='none';document.getElementById('doneCard').style.display='block'}
+if(d.success){document.getElementById('formCard').style.display='none';document.getElementById('doneCard').style.display='block';startCountdown()}
 else{showMsg(d.error||'提交失败','err')}
 })
 .catch(function(){showMsg('网络错误','err')})
 };
 function showMsg(t,c){var m=document.getElementById('msg');m.textContent=t;m.className='msg '+c}
+var cdTimer=null;
+function startCountdown(){var sec=90;var el=document.getElementById('cdNum');var msg=document.getElementById('doneMsg');var expired=document.getElementById('expiredMsg');cdTimer=setInterval(function(){sec--;if(el)el.textContent=sec;if(sec<=0){clearInterval(cdTimer);if(msg)msg.style.display='none';if(expired)expired.style.display='block'}},1000)}
 </script></body></html>`
 }
 
