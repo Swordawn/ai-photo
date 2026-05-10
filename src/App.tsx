@@ -17,6 +17,16 @@ const STYLE_NAMES: Record<string, string> = {
   qingxin: '小清新', youhua: '油画', sumiao: '素描',
 }
 
+// 获取或生成设备ID
+function getDeviceId() {
+  let id = localStorage.getItem('deviceId')
+  if (!id) {
+    id = 'kiosk-' + Math.random().toString(36).substr(2, 8)
+    localStorage.setItem('deviceId', id)
+  }
+  return id
+}
+
 // 上报当前页面到后端
 function reportPage(page: string) {
   fetch('/api/report-page', {
@@ -67,6 +77,37 @@ export default function App() {
     const timer = setInterval(checkStatus, 15000)
     return () => clearInterval(timer)
   }, [])
+
+  // 设备心跳（每30秒上报，接收命令）
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      fetch('/api/device/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: getDeviceId(), page: state.page, version: '1.0.0' }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.commands && data.commands.length > 0) {
+            for (const cmd of data.commands) {
+              if (cmd.type === 'shutdown') {
+                fetch('/api/device/ack-shutdown', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ deviceId: getDeviceId() }),
+                }).catch(() => {})
+                window.close()
+                return
+              }
+            }
+          }
+        })
+        .catch(() => {})
+    }
+    sendHeartbeat()
+    const timer = setInterval(sendHeartbeat, 30000)
+    return () => clearInterval(timer)
+  }, [state.page])
 
   const handleGenerate = useCallback(async (styleId: string, signal?: AbortSignal) => {
     if (!state.capturedPhoto) return

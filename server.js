@@ -30,6 +30,10 @@ let localSha = ''
 let updateStatus = 'idle'
 let updateMessage = ''
 
+// ===== 多设备管理 =====
+const devices = new Map()        // deviceId -> { name, page, lastSeen, ip, version }
+const deviceCommands = new Map() // deviceId -> [{ type, timestamp }]
+
 // 读取本地版本和 SHA
 try {
   const pkg = JSON.parse(await readFile(PKG_PATH, 'utf-8'))
@@ -38,11 +42,6 @@ try {
 try {
   const state = JSON.parse(await readFile(OTA_STATE_PATH, 'utf-8'))
   localSha = state.sha || ''
-} catch {}
-
-try {
-  const pkg = JSON.parse(await readFile(PKG_PATH, 'utf-8'))
-  localVersion = pkg.version || '1.0.0'
 } catch {}
 
 // 中间件
@@ -60,7 +59,7 @@ app.use('/uploads', express.static(uploadsDir))
 // 开启后拦截所有前端 API 调用（防止 API 被盗用/滥用）
 function apiGateMiddleware(req, res, next) {
   // 管理 API 不受限制
-  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/machine-status')) {
+  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/machine-status') || req.path.startsWith('/api/device')) {
     return next()
   }
   // 如果 API 已锁定，返回 503
@@ -161,6 +160,76 @@ app.post('/api/report-page', (req, res) => {
   const { page } = req.body
   if (page) app.set('currentPage', page)
   res.json({ ok: true })
+})
+
+// ===== 设备管理 API =====
+
+// 设备心跳（每30秒调用，返回待执行命令）
+app.post('/api/device/heartbeat', (req, res) => {
+  const { deviceId, page, version } = req.body
+  if (!deviceId) return res.status(400).json({ error: '缺少 deviceId' })
+  const existing = devices.get(deviceId) || {}
+  devices.set(deviceId, {
+    name: existing.name || deviceId,
+    page: page || 'unknown',
+    lastSeen: Date.now(),
+    ip: req.ip || req.connection?.remoteAddress || '',
+    version: version || '1.0.0',
+  })
+  // 返回待执行命令并清空队列
+  const commands = deviceCommands.get(deviceId) || []
+  deviceCommands.delete(deviceId)
+  res.json({ commands })
+})
+
+// 设备确认关机
+app.post('/api/device/ack-shutdown', (req, res) => {
+  const { deviceId } = req.body
+  console.log(`[Device] 设备 ${deviceId} 已确认关机`)
+  if (deviceId) {
+    const dev = devices.get(deviceId)
+    if (dev) dev.page = 'shutdown'
+  }
+  res.json({ ok: true })
+})
+
+// 管理员：获取所有设备列表
+app.get('/api/admin/devices', authMiddleware, (req, res) => {
+  const list = []
+  for (const [id, dev] of devices) {
+    const online = Date.now() - dev.lastSeen < 60000
+    list.push({ id, name: dev.name, page: dev.page, lastSeen: dev.lastSeen, online, version: dev.version })
+  }
+  list.sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0) || b.lastSeen - a.lastSeen)
+  res.json({ devices: list })
+})
+
+// 管理员：向单个设备发送关机命令
+app.post('/api/admin/devices/:deviceId/shutdown', authMiddleware, (req, res) => {
+  const { deviceId } = req.params
+  if (!devices.has(deviceId)) return res.status(404).json({ error: '设备不存在' })
+  if (!deviceCommands.has(deviceId)) deviceCommands.set(deviceId, [])
+  deviceCommands.get(deviceId).push({ type: 'shutdown', timestamp: Date.now() })
+  res.json({ success: true })
+})
+
+// 管理员：向所有设备发送关机命令
+app.post('/api/admin/devices/shutdown-all', authMiddleware, (req, res) => {
+  const now = Date.now()
+  for (const [id] of devices) {
+    if (!deviceCommands.has(id)) deviceCommands.set(id, [])
+    deviceCommands.get(id).push({ type: 'shutdown', timestamp: now })
+  }
+  res.json({ success: true, count: devices.size })
+})
+
+// 管理员：重命名设备
+app.put('/api/admin/devices/:deviceId/name', authMiddleware, (req, res) => {
+  const { deviceId } = req.params
+  const { name } = req.body
+  if (!devices.has(deviceId)) return res.status(404).json({ error: '设备不存在' })
+  if (name) devices.get(deviceId).name = name
+  res.json({ success: true })
 })
 
 // ===== 管理页面 =====
@@ -288,7 +357,7 @@ body{font-family:'Noto Sans SC',-apple-system,sans-serif;background:var(--bg);co
 .btn-logout{background:none;border:1px solid var(--border);color:var(--text-dim);padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:.2s}
 .btn-logout:hover{border-color:var(--danger);color:var(--danger)}
 /* 统计条 */
-.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px 20px}
+.stats-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px 20px}
 .stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;transition:.2s}
 .stat-card:hover{border-color:var(--accent);transform:translateY(-1px)}
 .stat-num{font-size:26px;font-weight:700;color:var(--accent);line-height:1.2}
@@ -369,6 +438,29 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 /* toast */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:var(--radius-sm);font-size:13px;z-index:200;animation:toastIn .3s ease}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+/* 设备管理 */
+.devices-section{padding:0 20px 20px}
+.devices-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.devices-title{font-size:14px;font-weight:600}
+.devices-actions{display:flex;gap:8px}
+.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.device-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;transition:.2s;position:relative}
+.device-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.device-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.device-name{font-size:13px;font-weight:600;color:var(--text)}
+.device-name-input{font-size:13px;font-weight:600;color:var(--text);background:var(--bg);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;width:120px;outline:none}
+.device-status{display:flex;align-items:center;gap:5px;font-size:11px}
+.device-dot{width:8px;height:8px;border-radius:50%}
+.device-dot.on{background:var(--success);box-shadow:0 0 6px rgba(34,197,94,.4)}
+.device-dot.off{background:var(--text-muted)}
+.device-page{font-size:11px;color:var(--text-dim);margin-bottom:4px}
+.device-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.device-info{font-size:10px;color:var(--text-muted)}
+.device-id{font-size:10px;color:var(--text-muted);font-family:monospace;margin-bottom:6px}
+.btn-shutdown{background:var(--danger);color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer;transition:.2s}
+.btn-shutdown:hover{background:#dc2626}
+.btn-shutdown-all{background:var(--danger);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:.2s}
+.btn-shutdown-all:hover{background:#dc2626}
 </style></head><body>
 <div class="login" id="loginPage"><div class="login-box">
 <h2>自助机管理后台</h2>
@@ -388,6 +480,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <div class="stat-card"><div class="stat-num" id="sToday">0</div><div class="stat-label">今日拍照</div></div>
 <div class="stat-card"><div class="stat-num" id="sPhotos">0</div><div class="stat-label">已完成</div></div>
 <div class="stat-card"><div class="stat-num" id="sUp">0m</div><div class="stat-label">运行时间</div></div>
+<div class="stat-card"><div class="stat-num" id="sDevices">0</div><div class="stat-label">在线设备</div></div>
 </div>
 <div class="quick-ctrl">
 <div class="ctrl-grid">
@@ -421,6 +514,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <div class="photo-grid" id="photoGrid"></div>
 <div class="empty" id="emptyState" style="display:none"><div class="empty-icon">&#128247;</div><div class="empty-text">暂无照片</div></div>
 </div>
+<div class="devices-section">
+<div class="devices-header">
+<span class="devices-title">设备管理</span>
+<div class="devices-actions">
+<button class="btn-sm btn-ghost" onclick="loadDevices()">刷新</button>
+<button class="btn-shutdown-all" onclick="confirmShutdownAll()">全部关机</button>
+</div>
+</div>
+<div class="device-grid" id="deviceGrid"></div>
+<div class="empty" id="emptyDevices" style="display:none"><div class="empty-icon">&#128187;</div><div class="empty-text">暂无设备连接</div></div>
+</div>
 </div>
 </div>
 <div id="modalRoot"></div>
@@ -446,13 +550,13 @@ return r.json()
 if(!r||r.error){document.getElementById('loginError').textContent='密码错误';document.getElementById('loginError').style.display='block';return}
 document.getElementById('loginPage').style.display='none';
 document.getElementById('appPage').classList.add('show');
-loadAll();if(_statusInterval)clearInterval(_statusInterval);_statusInterval=setInterval(loadStatus,10000)
+loadAll();if(_statusInterval)clearInterval(_statusInterval);_statusInterval=setInterval(function(){loadStatus();loadDevices()},30000)
 }).catch(e=>{
 document.getElementById('loginError').textContent='网络错误，请检查连接';
 document.getElementById('loginError').style.display='block'
 })}
 function doLogout(){pwd='';document.getElementById('appPage').classList.remove('show');document.getElementById('loginPage').style.display='flex';document.getElementById('pwdInput').value=''}
-function loadAll(){loadStatus();loadConfig();loadPhotos();loadVersion()}
+function loadAll(){loadStatus();loadConfig();loadPhotos();loadVersion();loadDevices()}
 function loadStatus(){api('/api/admin/status').then(r=>{
 document.getElementById('sPage').textContent=r.currentPage||'-';
 document.getElementById('sToday').textContent=r.todayCount||0;
@@ -495,6 +599,12 @@ function rm(n){showModal('确认删除','确定删除此照片？',[{text:'取�
 function confirmClearAll(){showModal('确认清空','确定清空所有照片？此操作不可恢复！',[{text:'取消',cls:'cancel'},{text:'清空全部',cls:'confirm'}]).then(i=>{if(i===1)api('/api/admin/photos','DELETE').then(()=>{loadPhotos();toast('已清空')})})}
 function loadVersion(){api('/api/admin/ota-status').then(r=>{document.getElementById('versionTag').textContent='v'+r.localVersion})}
 function checkUpdate(){toast('正在检查...');api('/api/admin/check-update').then(r=>{if(r.hasUpdate){showModal('发现新版本','当前: v'+r.localVersion+' → 最新: v'+r.remoteVersion,[{text:'稍后',cls:'cancel'},{text:'立即更新',cls:'confirm primary'}]).then(i=>{if(i===1){api('/api/admin/do-update','POST').then(()=>{toast('更新中，请等待重启...')})}})}else{toast('已是最新版本 v'+r.localVersion)}}).catch(()=>{toast('检查失败')})}
+function loadDevices(){api('/api/admin/devices').then(r=>{var devices=r.devices||[];var onlineCount=devices.filter(function(d){return d.online}).length;document.getElementById('sDevices').textContent=onlineCount;var grid=document.getElementById('deviceGrid');var empty=document.getElementById('emptyDevices');if(devices.length===0){grid.innerHTML='';empty.style.display='block';return}empty.style.display='none';grid.innerHTML=devices.map(function(d){var ago=Math.floor((Date.now()-d.lastSeen)/1000);var timeText=ago<60?ago+'秒前':ago<3600?Math.floor(ago/60)+'分钟前':Math.floor(ago/3600)+'小时前';return '<div class="device-card" id="dev-'+d.id+'"><div class="device-row"><span class="device-name" ondblclick="renameDevice(\''+escDevice(d.id)+'\',this)">'+escDevice(d.name)+'</span><span class="device-status"><span class="device-dot '+(d.online?'on':'off')+'"></span>'+(d.online?'在线':'离线')+'</span></div><div class="device-id">ID: '+escDevice(d.id)+'</div><div class="device-page">当前页面: '+escDevice(d.page)+'</div><div class="device-meta"><span class="device-info">v'+escDevice(d.version)+' · '+timeText+'</span><button class="btn-shutdown" onclick="confirmShutdown(\''+escDevice(d.id)+'\')">关机</button></div></div>'}).join('')})}
+function escDevice(s){if(!s)return'';return String(s).replace(/\\\\/g,'\\\\\\\\').replace(/'/g,"\\\\'")}
+function confirmShutdown(deviceId){showModal('确认关机','确定向设备 '+deviceId+' 发送关机命令？',[{text:'取消',cls:'cancel'},{text:'确认关机',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/devices/'+encodeURIComponent(deviceId)+'/shutdown','POST').then(function(){loadDevices();toast('已发送关机命令')})}})}
+function confirmShutdownAll(){api('/api/admin/devices').then(function(r){var devices=r.devices||[];if(devices.length===0){toast('无在线设备');return}showModal('全部关机','确定向所有 '+devices.length+' 台设备发送关机命令？此操作不可撤销！',[{text:'取消',cls:'cancel'},{text:'确认全部关机',cls:'confirm'}]).then(function(i){if(i===1){api('/api/admin/devices/shutdown-all','POST').then(function(r2){loadDevices();toast('已向 '+r2.count+' 台设备发送关机命令')})}})})}
+function renameDevice(deviceId,el){var oldName=el.textContent;el.outerHTML='<input class="device-name-input" value="'+oldName+'" id="rn-'+deviceId+'" onblur="saveRename(\''+escDevice(deviceId)+'\',this)" onkeydown="if(event.key===\\'Enter\\')this.blur()">';var inp=document.getElementById('rn-'+deviceId);inp.focus();inp.select()}
+function saveRename(deviceId,inp){var newName=inp.value.trim();if(!newName){newName=deviceId}api('/api/admin/devices/'+encodeURIComponent(deviceId)+'/name','PUT',{name:newName}).then(function(){loadDevices();toast('设备已重命名')})}
 </script></body></html>`
 }
 
