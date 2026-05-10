@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { getFrameSrc } from '../data/frames'
+import { getFrameSrc, FRAMES } from '../data/frames'
 import { apiFetch } from '../apiBase'
 
 interface Props {
@@ -20,7 +20,10 @@ export default function PrintPage({
   const [isDownloading, setIsDownloading] = useState(false)
   const [countdown, setCountdown] = useState(90)
 
-  const frameSrc = selectedFrame ? getFrameSrc(selectedFrame) : null
+  // 确保始终有边框：使用 selectedFrame 或默认第一个边框
+  const effectiveFrame = selectedFrame || FRAMES[0]?.id || null
+  const frameSrc = effectiveFrame ? getFrameSrc(effectiveFrame) : null
+  console.log('[PrintPage] selectedFrame:', selectedFrame, 'effectiveFrame:', effectiveFrame, 'frameSrc:', frameSrc)
 
   useEffect(() => {
     if (countdown <= 0) { onBack(); return }
