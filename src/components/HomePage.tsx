@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 
 const collegeLogo = new URL('../assets/college-logo.png', import.meta.url).href
-const registerQR = new URL('../assets/register-qr .png', import.meta.url).href
 
 const BG_IMAGES = [
   new URL('../assets/backgrounds/bg (1).jpg', import.meta.url).href,
@@ -12,12 +12,19 @@ const BG_IMAGES = [
   new URL('../assets/backgrounds/bg (6).jpg', import.meta.url).href,
 ]
 
+interface Registration {
+  id: number
+  name: string
+  class_name: string
+}
+
 interface Props {
   onStart: () => void
   onCamera: () => void
+  registration: Registration | null
 }
 
-export default function HomePage({ onStart, onCamera }: Props) {
+export default function HomePage({ onStart: _, onCamera, registration }: Props) {
   const [currentBg, setCurrentBg] = useState(0)
 
   useEffect(() => {
@@ -26,6 +33,9 @@ export default function HomePage({ onStart, onCamera }: Props) {
     }, 3000)
     return () => clearInterval(timer)
   }, [])
+
+  // 动态 QR 码 URL
+  const qrUrl = `${window.location.protocol}//${window.location.host}/register`
 
   return (
     <div style={{
@@ -43,7 +53,6 @@ export default function HomePage({ onStart, onCamera }: Props) {
         gap: 24,
         flexShrink: 0,
       }}>
-        {/* 左：学校Logo */}
         <img
           src={collegeLogo}
           alt="学院Logo"
@@ -52,8 +61,6 @@ export default function HomePage({ onStart, onCamera }: Props) {
             objectFit: 'cover', flexShrink: 0,
           }}
         />
-
-        {/* 右：标题文字 */}
         <div>
           <h1 style={{
             fontSize: 52,
@@ -130,93 +137,91 @@ export default function HomePage({ onStart, onCamera }: Props) {
           alignItems: 'center',
           width: '100%',
         }}>
-          {/* 二维码白色卡片 */}
-          <div style={{
-            width: 160, height: 160,
-            background: 'white', borderRadius: 16,
-            padding: 12,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            margin: '0 auto 20px',
-          }}>
-            <img
-              src={registerQR}
-              alt="登记二维码"
-              style={{ width: '100%', height: '100%', display: 'block' }}
-            />
-          </div>
 
-          {/* 扫码文字 */}
-          <p style={{
-            fontSize: 24,
-            color: 'white',
-            fontWeight: 500,
-            textShadow: '0 2px 8px rgba(0,0,0,0.5)',
-            textAlign: 'center',
-            margin: '0 0 24px',
-            fontFamily: '"SimHei", "黑体", sans-serif',
-          }}>
-            手机扫码 · 免费制作校园AI纪念照
-          </p>
+          {registration ? (
+            /* ===== 已登记：显示欢迎信息 + 开始拍照按钮 ===== */
+            <div style={{
+              background: 'rgba(255,255,255,0.95)',
+              borderRadius: 20,
+              padding: '32px 40px',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
+              textAlign: 'center',
+              minWidth: 300,
+            }}>
+              <p style={{ fontSize: 14, color: '#999', marginBottom: 8 }}>
+                欢迎使用 AI 校园写真
+              </p>
+              <h2 style={{
+                fontSize: 24, fontWeight: 700, color: '#0d2a6e',
+                margin: '0 0 4px',
+              }}>
+                {registration.name}
+              </h2>
+              <p style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>
+                {registration.class_name}
+              </p>
+              <button
+                onClick={onCamera}
+                style={{
+                  borderRadius: 30,
+                  padding: '16px 40px',
+                  fontSize: 18, fontWeight: 700,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #C9A84C, #FFE566)',
+                  color: '#0d2a6e',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 16px rgba(201,168,76,0.5)',
+                  fontFamily: '"SimHei", "黑体", sans-serif',
+                }}
+              >
+                📷 开始拍照
+              </button>
+            </div>
+          ) : (
+            /* ===== 未登记：显示 QR 码 ===== */
+            <>
+              {/* 动态 QR 码卡片 */}
+              <div style={{
+                width: 180, height: 180,
+                background: 'white', borderRadius: 16,
+                padding: 12,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                margin: '0 auto 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <QRCodeSVG
+                  value={qrUrl}
+                  size={156}
+                  level="M"
+                  bgColor="#ffffff"
+                  fgColor="#0d2a6e"
+                />
+              </div>
 
-          {/* 三个横排按钮 */}
-          <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
-            {/* 信息登记 */}
-            <button
-              onClick={onStart}
-              style={{
-                borderRadius: 30,
-                padding: '16px 32px',
-                fontSize: 18, fontWeight: 500,
-                border: '1.5px solid rgba(255,255,255,0.5)',
-                background: 'rgba(10,40,110,0.6)',
-                backdropFilter: 'blur(8px)',
+              <p style={{
+                fontSize: 24,
                 color: 'white',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
+                fontWeight: 500,
+                textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                textAlign: 'center',
+                margin: '0 0 8px',
                 fontFamily: '"SimHei", "黑体", sans-serif',
-              }}
-            >
-              📋 信息登记
-            </button>
+              }}>
+                手机扫码 · 免费制作校园AI纪念照
+              </p>
 
-            {/* 立即拍摄 - 金色主按钮 */}
-            <button
-              onClick={onCamera}
-              style={{
-                borderRadius: 30,
-                padding: '16px 32px',
-                fontSize: 18, fontWeight: 700,
-                border: 'none',
-                background: 'linear-gradient(135deg, #C9A84C, #FFE566)',
-                color: '#0d2a6e',
-                cursor: 'pointer',
-                boxShadow: '0 4px 16px rgba(201,168,76,0.5)',
-                transition: 'all 0.2s',
-                fontFamily: '"SimHei", "黑体", sans-serif',
-              }}
-            >
-              📷 立即拍摄
-            </button>
-
-            {/* 作品展示 */}
-            <button
-              onClick={onStart}
-              style={{
-                borderRadius: 30,
-                padding: '16px 32px',
-                fontSize: 18, fontWeight: 500,
-                border: '1.5px solid rgba(255,255,255,0.5)',
-                background: 'rgba(10,40,110,0.6)',
-                backdropFilter: 'blur(8px)',
-                color: 'white',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                fontFamily: '"SimHei", "黑体", sans-serif',
-              }}
-            >
-              🖼 作品展示
-            </button>
-          </div>
+              <p style={{
+                fontSize: 14,
+                color: 'rgba(255,255,255,0.6)',
+                textAlign: 'center',
+                margin: '0 0 24px',
+              }}>
+                扫描二维码填写信息后即可开始拍照
+              </p>
+            </>
+          )}
         </div>
       </div>
 

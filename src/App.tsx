@@ -89,7 +89,6 @@ export default function App() {
         .then(data => {
           if (data.registration) {
             setRegistration(data.registration)
-            goTo('camera')
           }
         })
         .catch(() => {})
@@ -97,7 +96,7 @@ export default function App() {
     poll()
     const timer = setInterval(poll, 5000)
     return () => clearInterval(timer)
-  }, [state.page, goTo])
+  }, [state.page])
 
   // 设备心跳（每30秒上报）
   useEffect(() => {
@@ -197,6 +196,7 @@ export default function App() {
             key="home"
             onStart={() => goTo('camera')}
             onCamera={() => goTo('camera')}
+            registration={registration}
           />
         )}
 
