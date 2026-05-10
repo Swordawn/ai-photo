@@ -17,10 +17,10 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '888888'
 const startTime = Date.now()
 const isWin = process.platform === 'win32'
 
-// OTA 热更新（零依赖，纯 Node.js 内置模块）
-const OTA_URL = 'https://raw.githubusercontent.com/Swordawn/ai-photo/main/ota.json'
-const OTA_TREE_URL = 'https://api.github.com/repos/Swordawn/ai-photo/git/trees/main?recursive=1'
-const OTA_RAW_BASE = 'https://raw.githubusercontent.com/Swordawn/ai-photo/main/'
+// OTA 热更新（零依赖，纯 Node.js 内置模块，使用 Gitee）
+const OTA_URL = 'https://gitee.com/Swordawn/ai-photo/raw/main/ota.json'
+const OTA_TREE_URL = 'https://gitee.com/api/v5/repos/Swordawn/ai-photo/git/trees/main?recursive=1'
+const OTA_RAW_BASE = 'https://gitee.com/Swordawn/ai-photo/raw/main/'
 const OTA_INTERVAL = 30 * 60 * 1000
 const PKG_PATH = join(__dirname, 'package.json')
 const OTA_STATE_PATH = join(__dirname, '.ota-state.json')
