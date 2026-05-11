@@ -581,6 +581,38 @@ app.get('/api/p/:id', (req, res) => {
   }
 })
 
+// 直接serve照片文件（同源，无CORS问题，下载页用）
+app.get('/dl/:id', async (req, res) => {
+  try {
+    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
+    if (!photo) return res.status(404).json({ error: '照片不存在' })
+    const filename = photo.filename
+    // 本地文件直接serve
+    if (filename.startsWith('/uploads/')) {
+      const filepath = join(__dirname, filename)
+      const resolved = resolve(filepath)
+      if (!resolved.startsWith(resolve(uploadsDir))) return res.status(403).json({ error: '禁止访问' })
+      if (!existsSync(filepath)) return res.status(404).json({ error: '文件不存在' })
+      res.set('Cache-Control', 'public, max-age=3600')
+      return res.sendFile(resolved)
+    }
+    // COS URL → 代理fetch + 缓存
+    if (filename.includes('cos.ap-nanjing.myqcloud.com') || filename.includes('dashscope')) {
+      const resp = await fetch(filename, { signal: AbortSignal.timeout(30000) })
+      if (!resp.ok) return res.status(502).json({ error: '远程图片获取失败' })
+      const buffer = Buffer.from(await resp.arrayBuffer())
+      res.set('Content-Type', 'image/jpeg')
+      res.set('Cache-Control', 'public, max-age=3600')
+      return res.send(buffer)
+    }
+    // 其他URL重定向
+    res.redirect(filename)
+  } catch (err) {
+    console.error('serve照片失败:', err)
+    res.status(500).json({ error: '加载失败' })
+  }
+})
+
 // 保存两份照片（原版+AI版，并行保存，优先上传到COS）
 app.post('/api/save-photos', async (req, res) => {
   try {
@@ -1254,11 +1286,7 @@ showError(e.message||'图片合成失败',function(){init(url)});
 
 if(photoId){
 if(!/^\\d+$/.test(photoId)){showError('无效的照片ID');}
-else{fetch('/api/p/'+photoId).then(function(r){if(!r.ok)throw new Error('服务器错误');return r.json()}).then(function(data){
-if(data.url)init(data.url);
-else showError('照片不存在');
-}).catch(function(e){showError(e.message||'加载失败',function(){location.reload()})});
-}
+else{init('/dl/'+photoId)}
 }else{init(photoUrl)}
 
 function download(){
