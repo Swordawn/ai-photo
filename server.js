@@ -631,7 +631,7 @@ app.get('/api/admin/server-info', authMiddleware, (req, res) => {
     cpu: {
       model: cpus[0]?.model || 'Unknown',
       cores: cpus.length,
-      usage: Math.round((1 - os.loadavg()[0] / cpus.length) * 100)
+      usage: Math.min(100, Math.round(os.loadavg()[0] / cpus.length * 100))
     },
     memory: {
       total: Math.round(totalMem / 1024 / 1024),
