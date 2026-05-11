@@ -191,24 +191,24 @@ export default function App() {
         )
         imageUrlForQr = finalImage
         console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
-
-        // AI生成成功后，保存原版+AI版两份照片到服务器
-        console.log('[handleGenerate] 保存照片到服务器（原版+AI版）...')
-        apiFetch('/api/save-photos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            originalUrl: state.capturedPhoto,  // 原版照片（base64）
-            aiUrl: finalImage,                  // AI生成的照片（远程URL）
-            regId: registration?.id || null,
-            style: styleId
-          })
-        }).then(r => r.json()).then(r => {
-          console.log('[handleGenerate] 照片保存结果:', r)
-        }).catch(err => {
-          console.error('[handleGenerate] 照片保存失败:', err)
-        })
       }
+
+      // 保存照片到服务器（所有模式都会触发）
+      console.log('[handleGenerate] 保存照片到服务器...')
+      apiFetch('/api/save-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originalUrl: state.capturedPhoto,  // 原版照片（base64）
+          aiUrl: finalImage,                  // AI照片或原版照片
+          regId: registration?.id || null,
+          style: styleId
+        })
+      }).then(r => r.json()).then(r => {
+        console.log('[handleGenerate] 照片保存结果:', r)
+      }).catch(err => {
+        console.error('[handleGenerate] 照片保存失败:', err)
+      })
 
       // 生成下载页面URL（微信扫码可直接下载）
       const downloadUrl = `/download?url=${encodeURIComponent(imageUrlForQr)}&frame=${state.selectedFrame || 'frame1'}`
