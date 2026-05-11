@@ -1,7 +1,24 @@
 import { Component, useCallback, useState, useEffect, useRef } from 'react'
 
-// 静默保存照片到服务器（带重试，最多3次）
+// ===== 照片持久化保存队列（localStorage，刷新不丢） =====
+const SAVE_QUEUE_KEY = 'photoBooth_saveQueue'
+
+function getSaveQueue(): Record<string, unknown>[] {
+  try { return JSON.parse(localStorage.getItem(SAVE_QUEUE_KEY) || '[]') } catch { return [] }
+}
+function setSaveQueue(queue: Record<string, unknown>[]) {
+  localStorage.setItem(SAVE_QUEUE_KEY, JSON.stringify(queue))
+}
+
+// 静默保存照片到服务器（带重试，最多3次，失败存入localStorage下次重试）
 async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3) {
+  // 先加入持久化队列
+  const queue = getSaveQueue()
+  const queueId = Date.now().toString(36)
+  payload._queueId = queueId
+  queue.push(payload)
+  setSaveQueue(queue)
+
   for (let i = 0; i < retries; i++) {
     try {
       const res = await apiFetch('/api/save-photos', {
@@ -10,21 +27,59 @@ async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3
         body: JSON.stringify(payload),
       })
       const data = await res.json()
-      if (data.success) { console.log('[save] 保存成功'); return true }
+      if (data.success) {
+        // 成功，从队列移除
+        const q = getSaveQueue().filter((item: Record<string, unknown>) => item._queueId !== queueId)
+        setSaveQueue(q)
+        console.log('[save] 保存成功')
+        return true
+      }
       throw new Error(data.error || '保存失败')
     } catch (err) {
       console.warn(`[save] 第${i + 1}次保存失败:`, err)
       if (i < retries - 1) await new Promise(r => setTimeout(r, (i + 1) * 2000))
     }
   }
-  console.error('[save] 保存彻底失败，已重试3次')
+  // 失败，保留在localStorage，下次页面加载时重试
+  console.error('[save] 本次保存失败，已加入持久化队列等待重试')
   return false
 }
+
+// 页面加载时处理localStorage中的待保存任务
+async function flushSaveQueue() {
+  const queue = getSaveQueue()
+  if (queue.length === 0) return
+  console.log(`[save] 发现${queue.length}个待保存任务，开始重试...`)
+  const remaining: Record<string, unknown>[] = []
+  for (const payload of queue) {
+    try {
+      const res = await apiFetch('/api/save-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (data.success) {
+        console.log('[save] 队列任务恢复成功')
+      } else {
+        remaining.push(payload)
+      }
+    } catch {
+      remaining.push(payload)
+    }
+  }
+  setSaveQueue(remaining)
+  if (remaining.length > 0) console.warn(`[save] ${remaining.length}个任务仍未完成，下次继续`)
+}
+
 import type { ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAppState } from './state/useAppState'
 import { generateAIImage } from './api/generate'
 import { apiFetch } from './apiBase'
+
+// 页面加载时立即处理待保存队列
+flushSaveQueue()
 
 import FloatingCatkins from './components/FloatingCatkins'
 import HomePage from './components/HomePage'
