@@ -386,11 +386,9 @@ export default function App() {
       } else if (!imageUrlForQr.startsWith('http')) {
         qrUrl = `${host}${imageUrlForQr}`
       }
-      // COS URL 直接用，不走代理
-      const downloadUrl = `/download?url=${encodeURIComponent(qrUrl)}&frame=${state.selectedFrame || 'frame1'}`
-      console.log('[handleGenerate] 跳转到结果页')
+      console.log('[handleGenerate] 跳转到结果页, qrUrl:', qrUrl)
       setResultImage(finalImage)
-      setServerUrl(downloadUrl)
+      setServerUrl(qrUrl)  // QR码用短链接，不是下载页面URL
       setErrorMsg(null)
 
       // 标记登记已使用

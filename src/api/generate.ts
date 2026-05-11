@@ -3,8 +3,8 @@ import { apiFetch } from '../apiBase'
 const API_KEY = import.meta.env.VITE_DASHSCOPE_KEY as string
 const SUBMIT_URL = '/dashscope/api/v1/services/aigc/image-generation/generation'
 const TASK_URL = '/dashscope/api/v1/tasks'
-// 指数退避轮询：500ms → 1s → 2s → 3s（快任务秒出，慢任务不频繁请求）
-const POLL_INTERVALS = [500, 1000, 2000, 3000]
+// 轮询间隔：前3次快速（500ms），之后稳定1.5s
+const POLL_INTERVALS = [500, 500, 500, 1500, 1500, 1500, 2000, 2000]
 const MAX_WAIT = 90000
 
 // 风格提示词映射
