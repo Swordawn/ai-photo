@@ -689,9 +689,11 @@ app.post('/api/save-photos', async (req, res) => {
     console.log(`[保存] 原版: ${originalFilename} (${originalBuffer.length} bytes) COS:${!!originalCosUrl}`)
     console.log(`[保存] AI版: ${aiFilename} (${aiBuffer.length} bytes) COS:${!!aiCosUrl}`)
 
-    // 事务写入数据库（保存COS URL或本地路径）
-    const originalPath = originalCosUrl || `/uploads/已完成照片/${originalFilename}`
-    const aiPath = aiCosUrl || `/uploads/已完成照片/${aiFilename}`
+    // 事务写入数据库（优先本地路径，COS URL作备份）
+    const localOriginal = `/uploads/已完成照片/${originalFilename}`
+    const localAi = `/uploads/已完成照片/${aiFilename}`
+    const originalPath = localOriginal
+    const aiPath = localAi
     let aiPhotoId = null
     const insertPhotos = db.transaction(() => {
       db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalPath, style || '', regId || null)
