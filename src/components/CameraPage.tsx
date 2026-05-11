@@ -93,33 +93,47 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
     if (captured) onCapture(captured)
   }, [captured, onCapture])
 
-  // 获取摄像头设备列表
+  // 获取摄像头设备列表（需要先请求权限才能获取设备名）
   useEffect(() => {
     const getDevices = async () => {
       try {
+        // 先请求一次摄像头权限，这样才能获取设备名称
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        stream.getTracks().forEach(t => t.stop()) // 立即停止
+
         const allDevices = await navigator.mediaDevices.enumerateDevices()
         const videoDevices = allDevices.filter(d => d.kind === 'videoinput')
         setDevices(videoDevices)
-        console.log('[Camera] 可用摄像头:', videoDevices.map(d => d.label || d.deviceId))
-        // 默认选择第一个外接摄像头（非内置）
-        const externalCamera = videoDevices.find(d => !d.label.includes('Integrated') && !d.label.includes('内置'))
-        if (externalCamera) {
-          setSelectedDeviceId(externalCamera.deviceId)
-          console.log('[Camera] 自动选择外接摄像头:', externalCamera.label)
-        } else if (videoDevices.length > 0) {
-          setSelectedDeviceId(videoDevices[0].deviceId)
+        console.log('[Camera] 可用摄像头:', videoDevices.map(d => `${d.label} (${d.deviceId.slice(0, 8)}...)`))
+
+        // 如果还没选择设备，默认选择外接摄像头
+        if (!selectedDeviceId && videoDevices.length > 0) {
+          const externalCamera = videoDevices.find(d =>
+            !d.label.toLowerCase().includes('integrated') &&
+            !d.label.includes('内置') &&
+            !d.label.includes('HD WebCam')
+          )
+          if (externalCamera) {
+            setSelectedDeviceId(externalCamera.deviceId)
+            console.log('[Camera] 自动选择外接摄像头:', externalCamera.label)
+          } else {
+            setSelectedDeviceId(videoDevices[0].deviceId)
+            console.log('[Camera] 使用默认摄像头:', videoDevices[0].label)
+          }
         }
       } catch (err) {
         console.error('[Camera] 获取设备列表失败:', err)
       }
     }
-    getDevices()
-  }, [isCameraReady])
+    if (isCameraReady) getDevices()
+  }, [isCameraReady, selectedDeviceId])
 
   // 切换摄像头
   const handleSwitchCamera = useCallback((deviceId: string) => {
+    console.log('[Camera] 切换摄像头:', deviceId)
     setSelectedDeviceId(deviceId)
-    setCameraKey(k => k + 1) // 重新加载摄像头
+    setIsCameraReady(false)
+    setCameraKey(k => k + 1)
   }, [])
 
   return (

@@ -102,7 +102,7 @@ export default function PrintPage({
 
       // 创建打印窗口
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-      const printWindow = window.open('', '_blank', 'width=1200,height=1800')
+      const printWindow = window.open('', '_blank', 'width=800,height=900')
       if (!printWindow) {
         alert('请允许弹出窗口以打印照片')
         return
@@ -112,38 +112,72 @@ export default function PrintPage({
         <!DOCTYPE html>
         <html>
         <head>
-          <title>AI校园写真 - 打印</title>
+          <title>AI校园写真 - 打印6寸照片</title>
           <style>
             @page {
-              size: 4in 6in;
+              size: 6in 4in landscape;
               margin: 0;
             }
-            * { margin: 0; padding: 0; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              width: 4in;
-              height: 6in;
-              overflow: hidden;
+              font-family: 'Microsoft YaHei', sans-serif;
+              background: #f5f5f5;
+              padding: 20px;
             }
-            img {
+            .print-area {
+              width: 6in;
+              height: 4in;
+              margin: 0 auto;
+              background: white;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .print-area img {
               width: 100%;
               height: 100%;
-              object-fit: contain;
+              object-fit: cover;
+            }
+            .controls {
+              text-align: center;
+              margin: 20px 0;
+            }
+            .controls p {
+              color: #666;
+              font-size: 14px;
+              margin-bottom: 15px;
+            }
+            .btn {
+              padding: 12px 30px;
+              border: none;
+              border-radius: 8px;
+              font-size: 16px;
+              cursor: pointer;
+              margin: 0 10px;
+            }
+            .btn-print {
+              background: #1565C0;
+              color: white;
+            }
+            .btn-close {
+              background: #eee;
+              color: #666;
             }
             @media print {
+              body { background: white; padding: 0; }
+              .controls { display: none; }
+              .print-area { box-shadow: none; width: 100%; height: 100%; }
               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             }
           </style>
         </head>
         <body>
-          <img src="${dataUrl}" />
-          <script>
-            window.onload = function() {
-              setTimeout(function() { window.print(); window.close(); }, 500);
-            }
-          </script>
+          <div class="controls">
+            <p>请在打印设置中选择 <strong>4×6英寸 / 10×15cm</strong> 纸张</p>
+            <button class="btn btn-print" onclick="window.print()">🖨️ 打印</button>
+            <button class="btn btn-close" onclick="window.close()">关闭</button>
+          </div>
+          <div class="print-area">
+            <img src="${dataUrl}" />
+          </div>
         </body>
         </html>
       `)
