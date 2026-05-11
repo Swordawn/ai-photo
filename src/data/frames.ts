@@ -1,5 +1,6 @@
-// 边框图片放在服务器本地，加快加载速度
-const FRAME_BASE = '/frames'
+// 边框图片走腾讯云COS，不走服务器带宽
+const COS_BASE = 'https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com'
+const FRAME_BASE = `${COS_BASE}/frames`
 
 export interface Frame {
   id: string

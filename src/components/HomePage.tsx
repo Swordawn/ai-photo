@@ -3,15 +3,15 @@ import { QRCodeSVG } from 'qrcode.react'
 
 const collegeLogo = new URL('../assets/college-logo.png', import.meta.url).href
 
-const CDN = 'https://ai-photo-cdn.pages.dev'
+const COS_BASE = 'https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com'
 
 const BG_IMAGES = [
-  `${CDN}/backgrounds/bg%20(1).jpg`,
-  `${CDN}/backgrounds/bg%20(2).jpg`,
-  `${CDN}/backgrounds/bg%20(3).jpg`,
-  `${CDN}/backgrounds/bg%20(4).jpg`,
-  `${CDN}/backgrounds/bg%20(5).jpg`,
-  `${CDN}/backgrounds/bg%20(6).jpg`,
+  `${COS_BASE}/backgrounds/bg%20(1).jpg`,
+  `${COS_BASE}/backgrounds/bg%20(2).jpg`,
+  `${COS_BASE}/backgrounds/bg%20(3).jpg`,
+  `${COS_BASE}/backgrounds/bg%20(4).jpg`,
+  `${COS_BASE}/backgrounds/bg%20(5).jpg`,
+  `${COS_BASE}/backgrounds/bg%20(6).jpg`,
 ]
 
 interface Registration {

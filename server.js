@@ -309,6 +309,7 @@ const ALLOWED_PROXY_HOSTS = [
   'dashscope.aliyuncs.com',
   'cdn.ai-photo-cdn.pages.dev',
   'ai-photo-cdn.pages.dev',
+  'ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com',
 ]
 
 app.get('/api/proxy-image', async (req, res) => {
