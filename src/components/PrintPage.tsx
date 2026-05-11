@@ -31,6 +31,133 @@ export default function PrintPage({
     return () => clearTimeout(timer)
   }, [countdown, onBack])
 
+  // 打印6寸照片
+  const handlePrint = useCallback(async () => {
+    console.log('[Print] ========== 开始打印流程 ==========')
+    setIsDownloading(true)
+
+    try {
+      // 加载图片
+      const directLoad = (src: string): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          img.onload = () => resolve(img)
+          img.onerror = () => reject(new Error('加载失败'))
+          img.src = src
+        })
+      }
+
+      const loadImage = async (src: string): Promise<HTMLImageElement> => {
+        if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/')) {
+          return directLoad(src)
+        }
+        // 远程URL通过代理
+        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
+        const resp = await apiFetch(proxyUrl)
+        if (!resp.ok) throw new Error(`代理返回 ${resp.status}`)
+        const blob = await resp.blob()
+        const blobUrl = URL.createObjectURL(blob)
+        const img = await directLoad(blobUrl)
+        URL.revokeObjectURL(blobUrl)
+        return img
+      }
+
+      // 加载照片和边框
+      const photo = await loadImage(resultImage)
+      const frame = frameSrc ? await loadImage(frameSrc) : null
+
+      // 创建6寸照片canvas (4x6英寸, 300DPI = 1200x1800像素)
+      const canvas = document.createElement('canvas')
+      canvas.width = 1200
+      canvas.height = 1800
+      const ctx = canvas.getContext('2d')!
+
+      // 白色背景
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      // 计算照片区域（留出边距）
+      const margin = 40
+      const photoWidth = canvas.width - margin * 2
+      const photoHeight = canvas.height - margin * 2
+
+      // 绘制照片（cover模式）
+      const frameAspect = photoWidth / photoHeight
+      const photoAspect = (photo.naturalWidth || photo.width) / (photo.naturalHeight || photo.height)
+      let sx = 0, sy = 0, sw = photo.naturalWidth || photo.width, sh = photo.naturalHeight || photo.height
+      if (photoAspect > frameAspect) {
+        sw = sh * frameAspect
+        sx = ((photo.naturalWidth || photo.width) - sw) / 2
+      } else {
+        sh = sw / frameAspect
+        sy = ((photo.naturalHeight || photo.height) - sh) / 2
+      }
+      ctx.drawImage(photo, sx, sy, sw, sh, margin, margin, photoWidth, photoHeight)
+
+      // 叠加边框
+      if (frame) {
+        ctx.drawImage(frame, margin, margin, photoWidth, photoHeight)
+      }
+
+      // 创建打印窗口
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+      const printWindow = window.open('', '_blank', 'width=1200,height=1800')
+      if (!printWindow) {
+        alert('请允许弹出窗口以打印照片')
+        return
+      }
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>AI校园写真 - 打印</title>
+          <style>
+            @page {
+              size: 4in 6in;
+              margin: 0;
+            }
+            * { margin: 0; padding: 0; }
+            body {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 4in;
+              height: 6in;
+              overflow: hidden;
+            }
+            img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+            }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" />
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); window.close(); }, 500);
+            }
+          </script>
+        </body>
+        </html>
+      `)
+      printWindow.document.close()
+
+      console.log('[Print] 打印窗口已打开')
+    } catch (err) {
+      console.error('[Print] 打印失败:', err)
+      alert('打印失败，请重试')
+    } finally {
+      setIsDownloading(false)
+    }
+  }, [resultImage, frameSrc])
+
   const handleDownload = useCallback(async () => {
     console.log('[Download] ========== 开始下载流程 ==========')
     console.log('[Download] resultImage:', resultImage ? resultImage.slice(0, 80) : 'NULL')
@@ -277,16 +404,18 @@ export default function PrintPage({
             </button>
 
             <button
-              onClick={() => setShowPrintConfirm(true)}
+              onClick={handlePrint}
+              disabled={isDownloading}
               style={{
                 width: '100%', height: 48,
                 background: '#e8a000', color: 'white', border: 'none', borderRadius: 8,
-                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                fontSize: 13, fontWeight: 500,
+                cursor: isDownloading ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
             >
               <span>🖨</span>
-              提交现场打印
+              {isDownloading ? '准备打印...' : '打印6寸照片'}
             </button>
 
             <button
