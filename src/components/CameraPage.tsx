@@ -21,7 +21,7 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
   const [isCameraReady, setIsCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [cameraKey, setCameraKey] = useState(0)
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
+  const facingMode = 'user' as const
   const [flash, setFlash] = useState(false)
   const [captured, setCaptured] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
