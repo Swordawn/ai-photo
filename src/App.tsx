@@ -313,19 +313,27 @@ export default function App() {
         }
       }
 
+      let photoId: number | null = null
+
       if (styleId === 'original') {
         console.log('[handleGenerate] 原版模式，跳过AI处理')
         finalImage = state.capturedPhoto
         // 原版照片直传COS
         const cosUrl = await uploadToCosDirect(state.capturedPhoto)
         imageUrlForQr = cosUrl || finalImage
-        // 记录到数据库
+        // 记录到数据库，获取照片ID
         if (cosUrl) {
-          apiFetch('/api/save-photo-record', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cosUrl, style: 'original', regId: registration?.id || null, type: 'original' }),
-          }).catch(err => console.error('[save-record] 失败:', err))
+          try {
+            const recordRes = await apiFetch('/api/save-photo-record', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cosUrl, style: 'original', regId: registration?.id || null, type: 'original' }),
+            })
+            const recordData = await recordRes.json()
+            photoId = recordData.id
+          } catch (err) {
+            console.error('[save-record] 失败:', err)
+          }
         } else {
           // COS直传失败，回退到服务端保存
           savePhotosWithRetry({
@@ -352,10 +360,13 @@ export default function App() {
       }
 
       // 生成下载页面URL（微信扫码可直接下载）
-      // 对于AI图片，使用代理URL避免QR码过长
+      // 使用短链接避免QR码过长
       let qrUrl = imageUrlForQr
-      if (styleId !== 'original' && imageUrlForQr.startsWith('http')) {
-        // AI图片使用服务器代理URL
+      if (photoId) {
+        // 有照片ID时使用短链接
+        qrUrl = `/api/p/${photoId}`
+      } else if (imageUrlForQr.startsWith('http')) {
+        // 没有ID时使用代理URL
         qrUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrlForQr)}`
       }
       const downloadUrl = `/download?url=${encodeURIComponent(qrUrl)}&frame=${state.selectedFrame || 'frame1'}`

@@ -543,11 +543,22 @@ app.post('/api/save-photo-record', (req, res) => {
   try {
     const { cosUrl, style, regId, type } = req.body
     if (!cosUrl) return res.status(400).json({ error: '缺少cosUrl' })
-    db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, ?, datetime('now'))").run(cosUrl, style || '', regId || null, type || 'ai')
-    res.json({ success: true })
+    const result = db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, ?, datetime('now'))").run(cosUrl, style || '', regId || null, type || 'ai')
+    res.json({ success: true, id: result.lastInsertRowid })
   } catch (err) {
     console.error('保存照片记录失败:', err)
     res.status(500).json({ error: '保存失败' })
+  }
+})
+
+// 短链接：通过照片ID获取照片URL（QR码用）
+app.get('/api/p/:id', (req, res) => {
+  try {
+    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
+    if (!photo) return res.status(404).json({ error: '照片不存在' })
+    res.redirect(photo.filename)
+  } catch (err) {
+    res.status(500).json({ error: '查询失败' })
   }
 })
 
