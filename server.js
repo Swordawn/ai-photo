@@ -1154,8 +1154,9 @@ h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
 var params=new URLSearchParams(window.location.search);
 var photoUrl=params.get('url');
 var frameId=params.get('frame')||'frame1';
-var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png'};
-var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
+var COS_BASE='https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com';
+var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
+var frameSrc=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 
 if(!photoUrl){
 document.getElementById('loading').innerHTML='<p style="color:red">缺少图片参数</p>';
