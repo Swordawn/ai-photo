@@ -59,6 +59,24 @@ export default function App() {
     }
   }, [state.page])
 
+  // Debug: ?debug=compose 直接跳转合成页（用相框1作为测试图）
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('debug') === 'compose' && state.page === 'home') {
+      const canvas = document.createElement('canvas')
+      canvas.width = 600; canvas.height = 900
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = '#e8d5b7'
+      ctx.fillRect(0, 0, 600, 900)
+      ctx.fillStyle = '#8B7355'
+      ctx.font = 'bold 48px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('DEBUG 测试照片', 300, 450)
+      setCapturedPhoto(canvas.toDataURL('image/jpeg', 0.9))
+      goTo('compose')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // 启动时检查机器状态 + 定期刷新
   useEffect(() => {
     const checkStatus = () => {
