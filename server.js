@@ -1157,37 +1157,8 @@ var photoUrl=params.get('url');
 var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
-// 边框用本地路径，避免CORS问题
 var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
-
-// 全局状态
 var originalPhotoSrc=null;
-var photoLoaded=false,frameLoaded=false,frameOk=false;
-var composited=false;
-var photoEl=null,frameEl=null;
-
-// Canvas合成函数（镜像+边框）
-function compositeImage(photoImg,frameImg,callback){
-var c=document.createElement('canvas');
-var useFrame=frameOk&&frameImg.naturalWidth>0;
-var fw=useFrame?(frameImg.naturalWidth||1016):(photoImg.naturalWidth||photoImg.width);
-var fh=useFrame?(frameImg.naturalHeight||1524):(photoImg.naturalHeight||photoImg.height);
-c.width=fw;c.height=fh;
-var ctx=c.getContext('2d');
-var pw=photoImg.naturalWidth||photoImg.width;
-var ph=photoImg.naturalHeight||photoImg.height;
-var fa=fw/fh;
-var pa=pw/ph;
-var sx=0,sy=0,sw=pw,sh=ph;
-if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
-// 镜像照片
-ctx.save();ctx.translate(fw,0);ctx.scale(-1,1);
-ctx.drawImage(photoImg,sx,sy,sw,sh,0,0,fw,fh);
-ctx.restore();
-// 叠加边框
-if(useFrame){ctx.drawImage(frameImg,0,0,fw,fh);}
-callback(c.toDataURL('image/jpeg',0.95));
-}
 
 function init(url){
 if(!url){
@@ -1195,30 +1166,20 @@ document.getElementById('loading').innerHTML='<p style="color:red">缺少图片�
 return;
 }
 originalPhotoSrc=url;
-photoEl=document.getElementById('photo');
-frameEl=document.getElementById('frame');
-photoEl.src=url;
-frameEl.src=frameSrc;
-frameEl.style.display='block';
-
-function checkReady(){
-if(composited)return;
-if(!photoLoaded)return;
-if(!frameLoaded&&!frameOk)return;
-composited=true;
-// 合成预览图
-compositeImage(photoEl,frameEl,function(dataUrl){
-photoEl.onload=null;
-photoEl.src=dataUrl;
+var photo=document.getElementById('photo');
+var frame=document.getElementById('frame');
+photo.src=url;
+frame.src=frameSrc;
+frame.style.display='block';
+// 照片加载完成就显示（CSS叠加边框，不需要Canvas合成）
+photo.onload=function(){
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
 document.getElementById('downloadBtn').disabled=false;
-});
-}
-photoEl.onload=function(){photoLoaded=true;checkReady()};
-photoEl.onerror=function(){document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>'};
-frameEl.onload=function(){frameLoaded=true;frameOk=true;checkReady()};
-frameEl.onerror=function(){frameEl.style.display='none';frameOk=false;checkReady()};
+};
+photo.onerror=function(){
+document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>';
+};
 }
 
 if(photoId){
@@ -1232,15 +1193,30 @@ document.getElementById('loading').innerHTML='<p style="color:red">加载失败<
 init(photoUrl);
 }
 
+// 点击保存时才Canvas合成（镜像+边框）
 function download(){
 var btn=document.getElementById('downloadBtn');
 btn.disabled=true;
 btn.textContent='正在生成...';
-// 从原始照片重新合成（避免使用已合成的预览图）
-var img=new Image();
-img.crossOrigin='anonymous';
-img.onload=function(){
-compositeImage(img,frameEl,function(dataUrl){
+var photo=document.getElementById('photo');
+var frame=document.getElementById('frame');
+try{
+var c=document.createElement('canvas');
+var fw=frame.naturalWidth||1016;
+var fh=frame.naturalHeight||1524;
+c.width=fw;c.height=fh;
+var ctx=c.getContext('2d');
+var pw=photo.naturalWidth||photo.width;
+var ph=photo.naturalHeight||photo.height;
+var fa=fw/fh;
+var pa=pw/ph;
+var sx=0,sy=0,sw=pw,sh=ph;
+if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
+ctx.save();ctx.translate(fw,0);ctx.scale(-1,1);
+ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
+ctx.restore();
+ctx.drawImage(frame,0,0,fw,fh);
+var dataUrl=c.toDataURL('image/jpeg',0.95);
 var a=document.createElement('a');
 a.href=dataUrl;
 a.download='AI校园写真_'+Date.now()+'.jpg';
@@ -1249,13 +1225,11 @@ a.click();
 document.body.removeChild(a);
 btn.textContent='保存成功！';
 setTimeout(function(){btn.textContent='保存到相册';btn.disabled=false},2000);
-});
-};
-img.onerror=function(){
+}catch(e){
+console.error(e);
 btn.textContent='保存失败，请长按图片保存';
 btn.disabled=false;
-};
-img.src=originalPhotoSrc;
+}
 }
 </script></body></html>`
 }
