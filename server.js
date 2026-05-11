@@ -517,7 +517,11 @@ app.post('/api/save-photos', async (req, res) => {
       await writeFile(aiPath, buffer)
       console.log(`[保存AI版] ${aiFilename} (${buffer.length} bytes)`)
     } else {
-      const resp = await fetch(aiUrl, { signal: AbortSignal.timeout(30000) })
+      // 添加Referer绕过DashScope防盗链
+      const resp = await fetch(aiUrl, {
+        headers: { 'Referer': 'https://dashscope.aliyuncs.com/' },
+        signal: AbortSignal.timeout(30000)
+      })
       if (!resp.ok) throw new Error(`下载AI版失败: ${resp.status}`)
       const buffer = Buffer.from(await resp.arrayBuffer())
       await writeFile(aiPath, buffer)
