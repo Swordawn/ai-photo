@@ -286,46 +286,68 @@ export default function App() {
       let finalImage: string
       let imageUrlForQr: string
 
+      // 直传COS：base64转Blob，用预签名URL上传
+      const uploadToCosDirect = async (base64: string): Promise<string | null> => {
+        try {
+          // 获取预签名URL
+          const signRes = await apiFetch('/api/cos-sign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: 'photo.jpg' }),
+          })
+          const { url, key } = await signRes.json()
+          // base64转Blob
+          const byteChars = atob(base64.split(',')[1] || base64)
+          const byteArray = new Uint8Array(byteChars.length)
+          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i)
+          const blob = new Blob([byteArray], { type: 'image/jpeg' })
+          // 直传COS
+          const putRes = await fetch(url, { method: 'PUT', body: blob, signal })
+          if (!putRes.ok) throw new Error(`COS上传失败: ${putRes.status}`)
+          const cosUrl = `https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com/${key}`
+          console.log('[COS] 直传成功:', cosUrl)
+          return cosUrl
+        } catch (err) {
+          console.warn('[COS] 直传失败，回退到服务端保存:', err)
+          return null
+        }
+      }
+
       if (styleId === 'original') {
-        // 原版：直接用拍摄的照片，不经过AI处理
         console.log('[handleGenerate] 原版模式，跳过AI处理')
         finalImage = state.capturedPhoto
-        // 上传到服务器获取URL（用于二维码）
-        const uploadRes = await apiFetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: state.capturedPhoto, filename: `original_${Date.now()}.jpg` }),
-          signal
-        })
-        const uploadData = await uploadRes.json()
-        imageUrlForQr = uploadData.url || finalImage
-        console.log('[handleGenerate] 原版上传完成:', imageUrlForQr?.slice(0, 80))
-        // 静默保存到已完成照片目录+数据库（带重试）
-        savePhotosWithRetry({
-          originalUrl: state.capturedPhoto,
-          aiUrl: state.capturedPhoto,
-          regId: registration?.id || null,
-          style: 'original'
-        })
+        // 原版照片直传COS
+        const cosUrl = await uploadToCosDirect(state.capturedPhoto)
+        imageUrlForQr = cosUrl || finalImage
+        // 记录到数据库
+        if (cosUrl) {
+          apiFetch('/api/save-photo-record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cosUrl, style: 'original', regId: registration?.id || null, type: 'original' }),
+          }).catch(err => console.error('[save-record] 失败:', err))
+        } else {
+          // COS直传失败，回退到服务端保存
+          savePhotosWithRetry({
+            originalUrl: state.capturedPhoto,
+            aiUrl: state.capturedPhoto,
+            regId: registration?.id || null,
+            style: 'original'
+          })
+        }
       } else {
         // AI生成图片（返回远程URL）
-        finalImage = await generateAIImage(
-          state.capturedPhoto,
-          styleId,
-          state.mockMode,
-          signal
-        )
+        finalImage = await generateAIImage(state.capturedPhoto, styleId, state.mockMode, signal)
         console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
-
-        // 静默保存照片到服务器（带重试，不阻塞显示）
-        console.log('[handleGenerate] 后台保存照片...')
+        // 原版照片直传COS
+        const cosUrl = await uploadToCosDirect(state.capturedPhoto)
+        // AI照片由服务端保存（远程URL，前端无法直传）
         savePhotosWithRetry({
-          originalUrl: state.capturedPhoto,
+          originalUrl: cosUrl || state.capturedPhoto,
           aiUrl: finalImage,
           regId: registration?.id || null,
           style: styleId
         })
-
         imageUrlForQr = finalImage
       }
 

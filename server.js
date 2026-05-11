@@ -522,6 +522,35 @@ function isAllowedUrl(urlStr) {
   } catch { return false }
 }
 
+// 生成COS预签名URL（前端直传COS用）
+app.post('/api/cos-sign', (req, res) => {
+  if (!COS_ENABLED) return res.status(503).json({ error: 'COS未配置' })
+  const { filename } = req.body
+  const key = `photos/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
+  const url = cos.getObjectUrl({
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    Key: key,
+    Sign: true,
+    Method: 'PUT',
+    Expires: 300, // 5分钟有效
+  })
+  res.json({ url, key })
+})
+
+// 记录照片到数据库（前端直传COS后调用）
+app.post('/api/save-photo-record', (req, res) => {
+  try {
+    const { cosUrl, style, regId, type } = req.body
+    if (!cosUrl) return res.status(400).json({ error: '缺少cosUrl' })
+    db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, ?, datetime('now'))").run(cosUrl, style || '', regId || null, type || 'ai')
+    res.json({ success: true })
+  } catch (err) {
+    console.error('保存照片记录失败:', err)
+    res.status(500).json({ error: '保存失败' })
+  }
+})
+
 // 保存两份照片（原版+AI版，并行保存，优先上传到COS）
 app.post('/api/save-photos', async (req, res) => {
   try {
