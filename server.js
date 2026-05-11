@@ -1199,6 +1199,9 @@ h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
 </div>
 </div>
 <script>
+var T0=Date.now();
+function log(msg){console.log('[DL '+Math.round(Date.now()-T0)+'ms] '+msg)}
+
 var params=new URLSearchParams(window.location.search);
 var photoUrl=params.get('url');
 var photoId=params.get('p');
@@ -1206,6 +1209,7 @@ var frameId=params.get('frame')||'frame1';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
 var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+log('page loaded, photoId='+photoId+', photoUrl='+(photoUrl?photoUrl.slice(0,60):'null')+', frame='+frameId);
 
 function isCrossOrigin(url){
 if(!url)return false;
@@ -1213,23 +1217,28 @@ if(url.startsWith('data:')||url.startsWith('blob:')||url.startsWith('/'))return 
 try{return new URL(url,window.location.origin).origin!==window.location.origin}catch{return false}
 }
 
-function loadImg(src,timeout){
+function loadImg(src,timeout,label){
 return new Promise(function(resolve,reject){
-var timer=setTimeout(function(){reject(new Error('图片加载超时'))},timeout||15000);
+var t=Date.now();
+log('loadImg['+label+'] start: '+src.slice(0,80));
+var timer=setTimeout(function(){log('loadImg['+label+'] TIMEOUT after '+(Date.now()-t)+'ms');reject(new Error('图片加载超时'))},timeout||15000);
 var img=new Image();
 if(isCrossOrigin(src))img.crossOrigin='anonymous';
-img.onload=function(){clearTimeout(timer);resolve(img)};
-img.onerror=function(){clearTimeout(timer);reject(new Error('图片加载失败'))};
+img.onload=function(){clearTimeout(timer);log('loadImg['+label+'] ok in '+(Date.now()-t)+'ms, size='+img.naturalWidth+'x'+img.naturalHeight);resolve(img)};
+img.onerror=function(){clearTimeout(timer);log('loadImg['+label+'] ERROR after '+(Date.now()-t)+'ms');reject(new Error('图片加载失败'))};
 img.src=src;
 });
 }
 
 function proxyIfNeeded(url){
-if(!url||!isCrossOrigin(url))return url;
+if(!url||!isCrossOrigin(url)){log('no proxy needed for: '+String(url).slice(0,60));return url}
+log('using proxy for: '+url.slice(0,60));
 return '/api/proxy-image?url='+encodeURIComponent(url);
 }
 
 function composite(photo,frame,cw,ch){
+var t=Date.now();
+log('composite start, canvas='+cw+'x'+ch);
 var c=document.createElement('canvas');
 c.width=cw;c.height=ch;
 var ctx=c.getContext('2d');
@@ -1245,6 +1254,7 @@ ctx.restore();
 ctx.drawImage(frame,0,0,cw,ch);
 var dataUrl=c.toDataURL('image/jpeg',0.92);
 c.width=0;c.height=0;
+log('composite done in '+(Date.now()-t)+'ms, dataUrl length='+dataUrl.length);
 return dataUrl;
 }
 
@@ -1260,18 +1270,23 @@ document.getElementById('loading').innerHTML=html;
 async function init(url){
 if(!url){showError('请通过扫描二维码访问此页面');return}
 try{
+log('init start, url='+url.slice(0,80));
 var loadUrl=proxyIfNeeded(url);
-var results=await Promise.all([loadImg(loadUrl,20000),loadImg(frameSrc,5000)]);
+log('loading photo+frame in parallel...');
+var results=await Promise.all([loadImg(loadUrl,20000,'photo'),loadImg(frameSrc,5000,'frame')]);
 var photo=results[0],frame=results[1];
+log('both images loaded, photo='+photo.naturalWidth+'x'+photo.naturalHeight+', frame='+frame.naturalWidth+'x'+frame.naturalHeight);
 var fw=frame.naturalWidth||1016;
 var fh=frame.naturalHeight||1524;
 if(fw<500)fw=1016;
 if(fh<500)fh=1524;
 var dataUrl=composite(photo,frame,fw,fh);
+log('setting img src...');
 var result=document.getElementById('result');
 result.src=dataUrl;
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
+log('DONE, total='+Math.round(Date.now()-T0)+'ms');
 if(isIOS){
 document.getElementById('downloadBtn').textContent='长按上方图片保存到相册';
 document.getElementById('downloadBtn').style.background='#999';
@@ -1280,6 +1295,7 @@ document.getElementById('saveTip').textContent='iOS设备请长按图片保存';
 }
 }catch(e){
 console.error(e);
+log('ERROR: '+(e.message||e)+' total='+Math.round(Date.now()-T0)+'ms');
 showError(e.message||'图片合成失败',function(){init(url)});
 }
 }
