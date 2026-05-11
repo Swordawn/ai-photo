@@ -65,6 +65,10 @@ let localSha = ''
 let updateStatus = 'idle'
 let updateMessage = ''
 
+// ===== 照片缓存（避免每次从COS拉取）=====
+const photoCache = new Map() // photoId -> { buffer, contentType, cachedAt }
+const PHOTO_CACHE_TTL = 3600000 // 1小时
+
 // ===== 多设备管理 =====
 const devices = new Map()        // deviceId -> { name, page, lastSeen, ip, version }
 const deviceCommands = new Map() // deviceId -> [{ type, timestamp }]
@@ -108,6 +112,11 @@ setInterval(() => {
     if (now - device.lastSeen > 600000) { // 10分钟未活动
       devices.delete(id)
       deviceCommands.delete(id)
+    }
+  }
+  // 清理过期照片缓存
+  for (const [id, entry] of photoCache) {
+    if (now - entry.cachedAt > PHOTO_CACHE_TTL) photoCache.delete(id)
     }
   }
 }, 300000)
@@ -581,10 +590,20 @@ app.get('/api/p/:id', (req, res) => {
   }
 })
 
-// 直接serve照片文件（同源，无CORS问题，下载页用）
+// 直接serve照片文件（同源，无CORS问题，下载页用，带内存缓存）
 app.get('/dl/:id', async (req, res) => {
   try {
-    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
+    const photoId = req.params.id
+    // 检查内存缓存
+    const cached = photoCache.get(photoId)
+    if (cached && Date.now() - cached.cachedAt < PHOTO_CACHE_TTL) {
+      res.set('Content-Type', cached.contentType)
+      res.set('Cache-Control', 'public, max-age=3600')
+      res.set('X-Cache', 'HIT')
+      return res.send(cached.buffer)
+    }
+
+    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(photoId)
     if (!photo) return res.status(404).json({ error: '照片不存在' })
     const filename = photo.filename
     // 本地文件直接serve
@@ -596,13 +615,19 @@ app.get('/dl/:id', async (req, res) => {
       res.set('Cache-Control', 'public, max-age=3600')
       return res.sendFile(resolved)
     }
-    // COS URL → 代理fetch + 缓存
-    if (filename.includes('cos.ap-nanjing.myqcloud.com') || filename.includes('dashscope')) {
+    // COS/DashScope URL → fetch + 缓存到内存
+    if (filename.includes('cos.ap-nanjing.myqcloud.com') || filename.includes('dashscope') || filename.startsWith('http')) {
+      console.log(`[dl] fetching from remote: ${filename.slice(0, 80)}`)
       const resp = await fetch(filename, { signal: AbortSignal.timeout(30000) })
       if (!resp.ok) return res.status(502).json({ error: '远程图片获取失败' })
       const buffer = Buffer.from(await resp.arrayBuffer())
-      res.set('Content-Type', 'image/jpeg')
+      const contentType = resp.headers.get('content-type') || 'image/jpeg'
+      // 存入缓存
+      photoCache.set(photoId, { buffer, contentType, cachedAt: Date.now() })
+      console.log(`[dl] cached photo ${photoId}, ${buffer.length} bytes`)
+      res.set('Content-Type', contentType)
       res.set('Cache-Control', 'public, max-age=3600')
+      res.set('X-Cache', 'MISS')
       return res.send(buffer)
     }
     // 其他URL重定向
