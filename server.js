@@ -1156,64 +1156,69 @@ var params=new URLSearchParams(window.location.search);
 var photoUrl=params.get('url');
 var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
-var COS_BASE='https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
-var frameSrc=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
+// 边框用本地路径，避免CORS问题
+var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 
-// 如果有照片ID，先获取照片URL
-function init(photoUrl){
-if(!photoUrl){
-document.getElementById('loading').innerHTML='<p style="color:red">缺少图片参数</p>';
-return;
-}
-var photo=document.getElementById('photo');
-var frame=document.getElementById('frame');
-var photoLoaded=false,frameLoaded=false;
-var frameOk=false;
-photo.crossOrigin='anonymous';
-photo.src=photoUrl;
-frame.src=frameSrc;
-frame.style.display='block';
+// 全局状态
+var originalPhotoSrc=null;
+var photoLoaded=false,frameLoaded=false,frameOk=false;
+var composited=false;
+var photoEl=null,frameEl=null;
 
-// 合成预览图（带边框+镜像），替换img src，这样长按保存也是带边框的
-function compositePreview(){
-if(!photoLoaded) return;
-try{
+// Canvas合成函数（镜像+边框）
+function compositeImage(photoImg,frameImg,callback){
 var c=document.createElement('canvas');
-var useFrame=frameOk&&frame.naturalWidth>0;
-var fw=useFrame?(frame.naturalWidth||1016):(photo.naturalWidth||photo.width);
-var fh=useFrame?(frame.naturalHeight||1524):(photo.naturalHeight||photo.height);
+var useFrame=frameOk&&frameImg.naturalWidth>0;
+var fw=useFrame?(frameImg.naturalWidth||1016):(photoImg.naturalWidth||photoImg.width);
+var fh=useFrame?(frameImg.naturalHeight||1524):(photoImg.naturalHeight||photoImg.height);
 c.width=fw;c.height=fh;
 var ctx=c.getContext('2d');
-var pw=photo.naturalWidth||photo.width;
-var ph=photo.naturalHeight||photo.height;
+var pw=photoImg.naturalWidth||photoImg.width;
+var ph=photoImg.naturalHeight||photoImg.height;
 var fa=fw/fh;
 var pa=pw/ph;
 var sx=0,sy=0,sw=pw,sh=ph;
 if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
-// 镜像照片（与自助机预览一致）
+// 镜像照片
 ctx.save();ctx.translate(fw,0);ctx.scale(-1,1);
-ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
+ctx.drawImage(photoImg,sx,sy,sw,sh,0,0,fw,fh);
 ctx.restore();
 // 叠加边框
-if(useFrame){ctx.drawImage(frame,0,0,fw,fh);}
-photo.src=c.toDataURL('image/jpeg',0.95);
-console.log('预览图合成完成（镜像+边框）');
-}catch(e){console.error('合成预览失败:',e);}
+if(useFrame){ctx.drawImage(frameImg,0,0,fw,fh);}
+callback(c.toDataURL('image/jpeg',0.95));
 }
 
+function init(url){
+if(!url){
+document.getElementById('loading').innerHTML='<p style="color:red">缺少图片参数</p>';
+return;
+}
+originalPhotoSrc=url;
+photoEl=document.getElementById('photo');
+frameEl=document.getElementById('frame');
+photoEl.src=url;
+frameEl.src=frameSrc;
+frameEl.style.display='block';
+
 function checkReady(){
-if(photoLoaded&&((frameLoaded&&frameOk)||frame.style.display==='none')){
-compositePreview();
+if(composited)return;
+if(!photoLoaded)return;
+if(!frameLoaded&&!frameOk)return;
+composited=true;
+// 合成预览图
+compositeImage(photoEl,frameEl,function(dataUrl){
+photoEl.onload=null;
+photoEl.src=dataUrl;
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
 document.getElementById('downloadBtn').disabled=false;
+});
 }
-}
-photo.onload=function(){photoLoaded=true;checkReady()};
-photo.onerror=function(){document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>'};
-frame.onload=function(){frameLoaded=true;frameOk=true;checkReady()};
-frame.onerror=function(){frame.style.display='none';checkReady()};
+photoEl.onload=function(){photoLoaded=true;checkReady()};
+photoEl.onerror=function(){document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>'};
+frameEl.onload=function(){frameLoaded=true;frameOk=true;checkReady()};
+frameEl.onerror=function(){frameEl.style.display='none';frameOk=false;checkReady()};
 }
 
 if(photoId){
@@ -1231,33 +1236,11 @@ function download(){
 var btn=document.getElementById('downloadBtn');
 btn.disabled=true;
 btn.textContent='正在生成...';
-
-try{
-var c=document.createElement('canvas');
-var useFrame=frameOk&&frame.naturalWidth>0;
-var fw=useFrame?(frame.naturalWidth||1016):(photo.naturalWidth||photo.width);
-var fh=useFrame?(frame.naturalHeight||1524):(photo.naturalHeight||photo.height);
-c.width=fw;c.height=fh;
-var ctx=c.getContext('2d');
-
-var pw=photo.naturalWidth||photo.width;
-var ph=photo.naturalHeight||photo.height;
-var fa=fw/fh;
-var pa=pw/ph;
-var sx=0,sy=0,sw=pw,sh=ph;
-if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
-// 镜像照片（与自助机预览一致）
-ctx.save();
-ctx.translate(fw,0);
-ctx.scale(-1,1);
-ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
-ctx.restore();
-// 叠加边框
-if(useFrame){
-ctx.drawImage(frame,0,0,fw,fh);
-}
-
-var dataUrl=c.toDataURL('image/jpeg',0.95);
+// 从原始照片重新合成（避免使用已合成的预览图）
+var img=new Image();
+img.crossOrigin='anonymous';
+img.onload=function(){
+compositeImage(img,frameEl,function(dataUrl){
 var a=document.createElement('a');
 a.href=dataUrl;
 a.download='AI校园写真_'+Date.now()+'.jpg';
@@ -1266,11 +1249,13 @@ a.click();
 document.body.removeChild(a);
 btn.textContent='保存成功！';
 setTimeout(function(){btn.textContent='保存到相册';btn.disabled=false},2000);
-}catch(e){
-console.error(e);
+});
+};
+img.onerror=function(){
 btn.textContent='保存失败，请长按图片保存';
 btn.disabled=false;
-}
+};
+img.src=originalPhotoSrc;
 }
 </script></body></html>`
 }
