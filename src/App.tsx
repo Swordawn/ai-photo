@@ -79,11 +79,8 @@ export default function App() {
 
   // 清除登记（标记为已使用，防止轮询再次拉出）
   const clearRegistration = useCallback(() => {
-    if (registration) {
-      apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
-    }
     setRegistration(null)
-  }, [registration])
+  }, [])
 
   // 扫码登记轮询（首页时每5秒检查新登记）
   useEffect(() => {
@@ -161,6 +158,7 @@ export default function App() {
   const handleGenerate = useCallback(async (styleId: string, signal?: AbortSignal) => {
     if (!state.capturedPhoto) return
 
+    setErrorMsg(null)
     setSelectedStyle(styleId)
     console.log('[handleGenerate] 开始生成, styleId:', styleId)
 
@@ -176,7 +174,8 @@ export default function App() {
         const uploadRes = await apiFetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: state.capturedPhoto, filename: `original_${Date.now()}.jpg` })
+          body: JSON.stringify({ image: state.capturedPhoto, filename: `original_${Date.now()}.jpg` }),
+          signal
         })
         const uploadData = await uploadRes.json()
         imageUrlForQr = uploadData.url || finalImage
@@ -293,6 +292,10 @@ export default function App() {
           />
         )}
 
+        {state.page === 'compose' && !state.capturedPhoto && (
+          <HomePage key="home-fallback" onStart={() => goTo('camera')} onCamera={() => goTo('camera')} registration={null} onClearRegistration={() => {}} />
+        )}
+
         {state.page === 'print' && state.resultImage && (
           <PrintPage
             key="print"
@@ -304,6 +307,10 @@ export default function App() {
             onRestart={reset}
             onBack={() => goTo('home')}
           />
+        )}
+
+        {state.page === 'print' && !state.resultImage && (
+          <HomePage key="home-fallback2" onStart={() => goTo('camera')} onCamera={() => goTo('camera')} registration={null} onClearRegistration={() => {}} />
         )}
       </AnimatePresence>
     </div>

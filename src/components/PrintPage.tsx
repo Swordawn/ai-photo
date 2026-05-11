@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { getFrameSrc, FRAMES } from '../data/frames'
 import { apiFetch } from '../apiBase'
@@ -16,9 +16,10 @@ interface Props {
 export default function PrintPage({
   resultImage, originalPhoto, selectedFrame, qrUrl, styleName, onRestart, onBack,
 }: Props) {
-  const [showPrintConfirm, setShowPrintConfirm] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [countdown, setCountdown] = useState(90)
+  const onBackRef = useRef(onBack)
+  useEffect(() => { onBackRef.current = onBack }, [onBack])
 
   // 确保始终有边框：使用 selectedFrame 或默认第一个边框
   const effectiveFrame = selectedFrame || FRAMES[0]?.id || null
@@ -26,10 +27,10 @@ export default function PrintPage({
   console.log('[PrintPage] selectedFrame:', selectedFrame, 'effectiveFrame:', effectiveFrame, 'frameSrc:', frameSrc)
 
   useEffect(() => {
-    if (countdown <= 0) { onBack(); return }
+    if (countdown <= 0) { onBackRef.current(); return }
     const timer = setTimeout(() => setCountdown(c => c - 1), 1000)
     return () => clearTimeout(timer)
-  }, [countdown, onBack])
+  }, [countdown])
 
   // 打印6寸照片 - 简化版，直接打开图片让用户手动打印
   const handlePrint = useCallback(() => {
@@ -130,9 +131,12 @@ export default function PrintPage({
           if (blob.size === 0) throw new Error('blob为空')
           console.log(`[Download][${label}] 代理成功, blob大小: ${blob.size}`)
           const blobUrl = URL.createObjectURL(blob)
-          const img = await directLoad(blobUrl)
-          URL.revokeObjectURL(blobUrl)
-          return img
+          try {
+            const img = await directLoad(blobUrl)
+            return img
+          } finally {
+            URL.revokeObjectURL(blobUrl)
+          }
         } catch (proxyErr) {
           console.warn(`[Download][${label}] 代理失败，尝试直接加载:`, proxyErr)
           return directLoad(src)
@@ -392,35 +396,6 @@ export default function PrintPage({
         </div>
       </div>
 
-      {/* 打印确认弹窗 */}
-      {showPrintConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 50,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: 'rgba(0,0,0,0.5)',
-        }} onClick={() => setShowPrintConfirm(false)}>
-          <div style={{
-            background: 'white', borderRadius: 16, padding: 36,
-            maxWidth: 320, width: '90%', textAlign: 'center',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🖨️</div>
-            <h2 style={{ fontSize: 18, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 8 }}>
-              已提交打印
-            </h2>
-            <p style={{ color: '#999', fontSize: 13, marginBottom: 20 }}>
-              请到打印台取照片
-            </p>
-            <button onClick={() => setShowPrintConfirm(false)} style={{
-              width: '100%', padding: 12,
-              background: '#1565C0', border: 'none', borderRadius: 8,
-              color: 'white', fontSize: 14, fontWeight: 500, cursor: 'pointer',
-            }}>
-              好的
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -334,7 +334,13 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
                 <span style={{ fontSize: 11, color: '#333', fontWeight: 600 }}>取消</span>
               )}
             </div>
-            <button onClick={() => setFacingMode(p => p === 'user' ? 'environment' : 'user')} style={ghostBtn}>
+            <button onClick={() => {
+              if (devices.length > 1) {
+                const currentIndex = devices.findIndex(d => d.deviceId === selectedDeviceId)
+                const nextIndex = (currentIndex + 1) % devices.length
+                handleSwitchCamera(devices[nextIndex].deviceId)
+              }
+            }} style={ghostBtn}>
               切换
             </button>
           </div>

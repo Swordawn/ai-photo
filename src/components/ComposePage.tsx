@@ -28,7 +28,7 @@ export default function ComposePage({
   onSelectStyle, onSelectFrame, onGenerate, onRetake, onBack, errorMsg,
 }: Props) {
   const [isGenerating, setIsGenerating] = useState(false)
-  const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const generatingRef = useRef(false)
 
   const currentFrameSrc = selectedFrame ? getFrameSrc(selectedFrame) : null
@@ -38,7 +38,7 @@ export default function ComposePage({
     generatingRef.current = true
     const styleId = selectedStyle || STYLES[0].id
     const controller = new AbortController()
-    setAbortController(controller)
+    abortControllerRef.current = controller
     setIsGenerating(true)
     try {
       await onGenerate(styleId, controller.signal)
@@ -47,15 +47,15 @@ export default function ComposePage({
     } finally {
       generatingRef.current = false
       setIsGenerating(false)
-      setAbortController(null)
+      abortControllerRef.current = null
     }
   }, [selectedStyle, onGenerate])
 
   const handleCancel = useCallback(() => {
-    abortController?.abort()
+    abortControllerRef.current?.abort()
     setIsGenerating(false)
-    setAbortController(null)
-  }, [abortController])
+    abortControllerRef.current = null
+  }, [])
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#111827' }}>

@@ -3,7 +3,8 @@ import { apiFetch } from '../apiBase'
 const API_KEY = import.meta.env.VITE_DASHSCOPE_KEY as string
 const SUBMIT_URL = '/dashscope/api/v1/services/aigc/image-generation/generation'
 const TASK_URL = '/dashscope/api/v1/tasks'
-const POLL_INTERVAL = 3000
+// 指数退避轮询：500ms → 1s → 2s → 3s（快任务秒出，慢任务不频繁请求）
+const POLL_INTERVALS = [500, 1000, 2000, 3000]
 const MAX_WAIT = 90000
 
 // 风格提示词映射
@@ -101,12 +102,15 @@ export async function generateAIImage(
   if (!taskId) throw new Error('未获取到 task_id')
   console.log('[generate] 任务ID:', taskId)
 
-  // Step 2: 轮询任务状态
+  // Step 2: 轮询任务状态（指数退避：500ms → 1s → 2s → 3s）
   const startTime = Date.now()
   let consecutiveErrors = 0
+  let pollIndex = 0
 
   while (Date.now() - startTime < MAX_WAIT) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL))
+    const delay = POLL_INTERVALS[Math.min(pollIndex, POLL_INTERVALS.length - 1)]
+    pollIndex++
+    await new Promise(r => setTimeout(r, delay))
 
     console.log('[generate] 轮询中...')
 

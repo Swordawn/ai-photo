@@ -71,6 +71,20 @@ function rateLimit(key, maxPerMinute = 30) {
   return entry.count <= maxPerMinute
 }
 
+// 每5分钟清理过期的速率限制条目和离线设备
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(key)
+  }
+  for (const [id, device] of devices) {
+    if (now - device.lastSeen > 600000) { // 10分钟未活动
+      devices.delete(id)
+      deviceCommands.delete(id)
+    }
+  }
+}, 300000)
+
 // 静态文件服务
 const uploadsDir = join(__dirname, 'uploads')
 if (!existsSync(uploadsDir)) {
@@ -305,6 +319,7 @@ app.all('/dashscope/{*path}', async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       fetchOptions.body = JSON.stringify(req.body)
     }
+    fetchOptions.signal = AbortSignal.timeout(25000)
     const resp = await fetch(targetUrl, fetchOptions)
     const data = await resp.text()
     res.status(resp.status)
@@ -469,80 +484,80 @@ app.post('/api/save-photo-record', (req, res) => {
   }
 })
 
-// 保存两份照片（原版+AI版）
+// URL白名单验证（复用ALLOWED_PROXY_HOSTS）
+function isAllowedUrl(urlStr) {
+  if (urlStr.startsWith('data:')) return true
+  try {
+    const parsed = new URL(urlStr)
+    return ALLOWED_PROXY_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))
+  } catch { return false }
+}
+
+// 保存两份照片（原版+AI版，并行保存）
 app.post('/api/save-photos', async (req, res) => {
   try {
     const { originalUrl, aiUrl, regId, style } = req.body
     if (!originalUrl || !aiUrl) return res.status(400).json({ error: '缺少照片URL' })
-
-    // 确保目录存在
-    const finishedDir = join(uploadsDir, '已完成照片')
-    if (!existsSync(finishedDir)) {
-      await mkdir(finishedDir, { recursive: true })
+    if (!isAllowedUrl(originalUrl) || !isAllowedUrl(aiUrl)) {
+      return res.status(403).json({ error: '不允许的图片来源域名' })
     }
+
+    // 确保目录存在（幂等，不需要检查存在）
+    const finishedDir = join(uploadsDir, '已完成照片')
+    await mkdir(finishedDir, { recursive: true })
 
     const timestamp = Date.now()
-    const results = []
-
-    // 1. 保存原版照片
     const originalFilename = `original_${timestamp}.jpg`
-    const originalPath = join(finishedDir, originalFilename)
-
-    if (originalUrl.startsWith('data:')) {
-      // base64格式，直接解码保存
-      const base64Data = originalUrl.replace(/^data:image\/\w+;base64,/, '')
-      const buffer = Buffer.from(base64Data, 'base64')
-      await writeFile(originalPath, buffer)
-      console.log(`[保存原版] ${originalFilename} (${buffer.length} bytes)`)
-    } else {
-      // 远程URL，下载保存
-      const resp = await fetch(originalUrl, { signal: AbortSignal.timeout(30000) })
-      if (!resp.ok) throw new Error(`下载原版失败: ${resp.status}`)
-      const buffer = Buffer.from(await resp.arrayBuffer())
-      await writeFile(originalPath, buffer)
-      console.log(`[保存原版] ${originalFilename} (${buffer.length} bytes)`)
-    }
-
-    // 写入数据库（type=original）
-    db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalFilename, style || '', regId || null)
-    results.push({ type: 'original', filename: originalFilename })
-
-    // 2. 保存AI生成的照片
     const aiFilename = `ai_${timestamp}.jpg`
+    const originalPath = join(finishedDir, originalFilename)
     const aiPath = join(finishedDir, aiFilename)
 
-    if (aiUrl.startsWith('data:')) {
-      const base64Data = aiUrl.replace(/^data:image\/\w+;base64,/, '')
-      const buffer = Buffer.from(base64Data, 'base64')
-      await writeFile(aiPath, buffer)
-      console.log(`[保存AI版] ${aiFilename} (${buffer.length} bytes)`)
-    } else {
-      // 添加Referer绕过DashScope防盗链
-      const resp = await fetch(aiUrl, {
-        headers: { 'Referer': 'https://dashscope.aliyuncs.com/' },
-        signal: AbortSignal.timeout(30000)
-      })
-      if (!resp.ok) throw new Error(`下载AI版失败: ${resp.status}`)
-      const buffer = Buffer.from(await resp.arrayBuffer())
-      await writeFile(aiPath, buffer)
-      console.log(`[保存AI版] ${aiFilename} (${buffer.length} bytes)`)
+    // 辅助函数：获取图片buffer
+    async function fetchImageBuffer(url, referer) {
+      if (url.startsWith('data:')) {
+        const base64Data = url.replace(/^data:image\/\w+;base64,/, '')
+        return Buffer.from(base64Data, 'base64')
+      }
+      const opts = { signal: AbortSignal.timeout(30000) }
+      if (referer) opts.headers = { 'Referer': referer }
+      const resp = await fetch(url, opts)
+      if (!resp.ok) throw new Error(`下载图片失败: ${resp.status}`)
+      return Buffer.from(await resp.arrayBuffer())
     }
 
-    // 写入数据库（type=ai）
-    db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiFilename, style || '', regId || null)
-    results.push({ type: 'ai', filename: aiFilename })
+    // 并行下载两张照片
+    const [originalBuffer, aiBuffer] = await Promise.all([
+      fetchImageBuffer(originalUrl),
+      fetchImageBuffer(aiUrl, 'https://dashscope.aliyuncs.com/'),
+    ])
 
-    res.json({ success: true, photos: results })
+    // 并行写入文件
+    await Promise.all([
+      writeFile(originalPath, originalBuffer),
+      writeFile(aiPath, aiBuffer),
+    ])
+
+    console.log(`[保存原版] ${originalFilename} (${originalBuffer.length} bytes)`)
+    console.log(`[保存AI版] ${aiFilename} (${aiBuffer.length} bytes)`)
+
+    // 事务写入数据库
+    const insertPhotos = db.transaction(() => {
+      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalFilename, style || '', regId || null)
+      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiFilename, style || '', regId || null)
+    })
+    insertPhotos()
+
+    res.json({
+      success: true,
+      photos: [
+        { type: 'original', filename: originalFilename },
+        { type: 'ai', filename: aiFilename },
+      ]
+    })
   } catch (err) {
     console.error('保存照片失败:', err)
     res.status(500).json({ error: '保存失败: ' + err.message })
   }
-})
-
-// 管理员：获取所有登记
-app.get('/api/admin/registrations', authMiddleware, (req, res) => {
-  const rows = db.prepare('SELECT * FROM registrations ORDER BY id DESC LIMIT 100').all()
-  res.json({ registrations: rows })
 })
 
 // 管理员：清空登记
@@ -698,7 +713,7 @@ app.get('/api/admin/server-info', authMiddleware, (req, res) => {
 
 // 获取日志
 app.get('/api/admin/logs', authMiddleware, (req, res) => {
-  const lines = parseInt(req.query.lines) || 100
+  const lines = Math.min(Math.max(parseInt(req.query.lines) || 100, 1), 1000)
   try {
     const logs = execSync(`sudo pm2 logs ai-photo --nostream --lines ${lines} 2>&1 | head -${lines}`, { timeout: 5000 }).toString()
     res.json({ logs })
@@ -860,6 +875,16 @@ app.get('/api/admin/stats', authMiddleware, (req, res) => {
   }
 })
 
+// CSV转义函数（防止CSV注入）
+function csvEscape(val) {
+  if (val == null) return ''
+  const str = String(val)
+  // 防止CSV注入：公式字符前加tab
+  const safe = /^[=+\-@\t\r]/.test(str) ? '\t' + str : str
+  // 转义双引号
+  return '"' + safe.replace(/"/g, '""') + '"'
+}
+
 // 导出 CSV
 app.get('/api/admin/export/csv', authMiddleware, (req, res) => {
   try {
@@ -868,7 +893,7 @@ app.get('/api/admin/export/csv', authMiddleware, (req, res) => {
     if (type === 'registrations') {
       const rows = db.prepare('SELECT * FROM registrations ORDER BY id DESC').all()
       const csv = '﻿' + 'ID,姓名,班级,手机号,登记时间,已使用\n' +
-        rows.map(r => `${r.id},"${r.name}","${r.class_name}","${r.phone}","${r.created_at}",${r.used}`).join('\n')
+        rows.map(r => `${r.id},${csvEscape(r.name)},${csvEscape(r.class_name)},${csvEscape(r.phone)},${csvEscape(r.created_at)},${r.used}`).join('\n')
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')
       res.setHeader('Content-Disposition', 'attachment; filename=registrations.csv')
       res.send(csv)
@@ -880,7 +905,7 @@ app.get('/api/admin/export/csv', authMiddleware, (req, res) => {
         ORDER BY p.id DESC
       `).all()
       const csv = '﻿' + 'ID,文件名,风格,相框,登记ID,姓名,班级,拍摄时间\n' +
-        rows.map(r => `${r.id},"${r.filename}","${r.style}","${r.frame||''}",${r.reg_id||''},"${r.name||''}","${r.class_name||''}","${r.created_at}"`).join('\n')
+        rows.map(r => `${r.id},${csvEscape(r.filename)},${csvEscape(r.style)},${csvEscape(r.frame)},${r.reg_id||''},${csvEscape(r.name)},${csvEscape(r.class_name)},${csvEscape(r.created_at)}`).join('\n')
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')
       res.setHeader('Content-Disposition', 'attachment; filename=photos.csv')
       res.send(csv)
