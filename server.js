@@ -1169,12 +1169,14 @@ return;
 var photo=document.getElementById('photo');
 var frame=document.getElementById('frame');
 var photoLoaded=false,frameLoaded=false;
+var frameOk=false;
+photo.crossOrigin='anonymous';
 photo.src=photoUrl;
 frame.src=frameSrc;
 frame.style.display='block';
 
 function checkReady(){
-if(photoLoaded&&(frameLoaded||frame.style.display==='none')){
+if(photoLoaded&&((frameLoaded&&frameOk)||frame.style.display==='none')){
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
 document.getElementById('downloadBtn').disabled=false;
@@ -1182,12 +1184,11 @@ document.getElementById('downloadBtn').disabled=false;
 }
 photo.onload=function(){photoLoaded=true;checkReady()};
 photo.onerror=function(){document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>'};
-frame.onload=function(){frameLoaded=true;checkReady()};
+frame.onload=function(){frameLoaded=true;frameOk=true;checkReady()};
 frame.onerror=function(){frame.style.display='none';checkReady()};
 }
 
 if(photoId){
-// 通过ID获取照片URL
 fetch('/api/p/'+photoId).then(function(r){return r.json()}).then(function(data){
 if(data.url)init(data.url);
 else document.getElementById('loading').innerHTML='<p style="color:red">照片不存在</p>';
@@ -1205,8 +1206,9 @@ btn.textContent='正在生成...';
 
 try{
 var c=document.createElement('canvas');
-var fw=frame.naturalWidth||1016;
-var fh=frame.naturalHeight||1524;
+var useFrame=frameOk&&frame.naturalWidth>0;
+var fw=useFrame?(frame.naturalWidth||1016):(photo.naturalWidth||photo.width);
+var fh=useFrame?(frame.naturalHeight||1524):(photo.naturalHeight||photo.height);
 c.width=fw;c.height=fh;
 var ctx=c.getContext('2d');
 
@@ -1222,7 +1224,10 @@ ctx.translate(fw,0);
 ctx.scale(-1,1);
 ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
 ctx.restore();
+// 叠加边框
+if(useFrame){
 ctx.drawImage(frame,0,0,fw,fh);
+}
 
 var dataUrl=c.toDataURL('image/jpeg',0.95);
 var a=document.createElement('a');
