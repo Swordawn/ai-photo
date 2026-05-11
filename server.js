@@ -199,6 +199,7 @@ function apiGateMiddleware(req, res, next) {
 app.use('/api/upload', apiGateMiddleware)
 app.use('/api/proxy-image', apiGateMiddleware)
 app.use('/api/report-page', apiGateMiddleware)
+app.use('/api/save-photos', apiGateMiddleware)
 
 // ===== 管理员认证 =====
 function authMiddleware(req, res, next) {
@@ -236,8 +237,8 @@ app.post('/api/upload', async (req, res) => {
     if (!isJpg && !isPng && !isWebp) {
       return res.status(400).json({ error: '不支持的图片格式' })
     }
-    const sanitized = (filename || `photo_${Date.now()}.jpg`).replace(/\.\.|[\/\\]/g, '').slice(0, 100)
-    const uniqueFilename = sanitized || `photo_${Date.now()}.jpg`
+    const sanitized = (filename || `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`).replace(/\.\.|[\/\\]/g, '').slice(0, 100)
+    const uniqueFilename = sanitized || `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
     const filepath = join(uploadsDir, uniqueFilename)
     const resolved = resolve(filepath)
     if (!resolved.startsWith(resolve(uploadsDir))) {
@@ -506,7 +507,7 @@ app.post('/api/save-photos', async (req, res) => {
     const finishedDir = join(uploadsDir, '已完成照片')
     await mkdir(finishedDir, { recursive: true })
 
-    const timestamp = Date.now()
+    const timestamp = Date.now() + '_' + Math.random().toString(36).slice(2, 8)
     const originalFilename = `original_${timestamp}.jpg`
     const aiFilename = `ai_${timestamp}.jpg`
     const originalPath = join(finishedDir, originalFilename)
@@ -1319,6 +1320,14 @@ function startTunnel() {
   }
 }
 
+// 全局错误处理中间件
+app.use((err, req, res, next) => {
+  console.error('未捕获的路由错误:', err)
+  if (!res.headersSent) {
+    res.status(500).json({ error: '服务器内部错误' })
+  }
+})
+
 // SPA 路由回退（生产环境）
 if (existsSync(distDir)) {
   app.get('{*path}', (req, res) => {
@@ -1337,4 +1346,14 @@ process.on('SIGINT', () => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`服务器已启动 :${PORT}`)
   startTunnel()
+})
+
+// 防止未处理的 Promise rejection 导致进程崩溃
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('未处理的 Promise rejection:', reason)
+})
+
+process.on('uncaughtException', (err) => {
+  console.error('未捕获的异常:', err)
+  // 不退出进程，让 PM2 管理重启
 })

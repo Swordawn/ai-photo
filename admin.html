@@ -346,6 +346,11 @@ let pwd='';
 let currentPage='dashboard';
 let regPage=1,photoPage=1;
 
+function escapeHtml(str){
+  if(str==null)return ''
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+}
+
 // API调用
 function api(url,opt={}){
   return fetch(url,{...opt,headers:{'X-Admin-Password':pwd,'Content-Type':'application/json',...(opt.headers||{})}}).then(r=>r.json())
@@ -414,14 +419,14 @@ function loadDashboard(){
     const maxD=Math.max(...daily.map(d=>d.count),1);
     document.getElementById('dailyChart').innerHTML=daily.slice(0,7).reverse().map(d=>{
       const pct=Math.round(d.count/maxD*100);
-      return '<div class="chart-bar" style="height:'+pct+'%"><span class="value">'+d.count+'</span><span class="label">'+d.date.slice(5)+'</span></div>';
+      return '<div class="chart-bar" style="height:'+pct+'%"><span class="value">'+d.count+'</span><span class="label">'+escapeHtml(d.date.slice(5))+'</span></div>';
     }).join('');
     // 风格分布
     const styles=r.styleStats||[];
     const maxS=Math.max(...styles.map(s=>s.count),1);
     document.getElementById('styleChart').innerHTML=styles.map(s=>{
       const pct=Math.round(s.count/maxS*100);
-      return '<div class="chart-bar" style="height:'+pct+'%"><span class="value">'+s.count+'</span><span class="label">'+(s.style||'原版')+'</span></div>';
+      return '<div class="chart-bar" style="height:'+pct+'%"><span class="value">'+s.count+'</span><span class="label">'+escapeHtml(s.style||'原版')+'</span></div>';
     }).join('');
   });
   api('/api/admin/devices').then(r=>{
@@ -443,11 +448,11 @@ function loadServer(){
     document.getElementById('diskBar').style.width=parseInt(r.disk.percent)+'%';
     document.getElementById('serverUp').textContent=r.uptime;
     document.getElementById('serverInfo').innerHTML=
-      '<div>CPU: '+r.cpu.model+' ('+r.cpu.cores+'核)</div>'+
+      '<div>CPU: '+escapeHtml(r.cpu.model)+' ('+r.cpu.cores+'核)</div>'+
       '<div>内存: '+r.memory.used+'MB / '+r.memory.total+'MB</div>'+
       '<div>磁盘: '+r.disk.used+' / '+r.disk.total+'</div>'+
-      '<div>系统: '+r.platform+' '+r.hostname+'</div>'+
-      '<div>Node: '+r.nodeVersion+'</div>';
+      '<div>系统: '+escapeHtml(r.platform)+' '+escapeHtml(r.hostname)+'</div>'+
+      '<div>Node: '+escapeHtml(r.nodeVersion)+'</div>';
   });
   loadLogs();
 }
@@ -471,8 +476,8 @@ function loadRegistrations(){
   api('/api/admin/registrations?page='+regPage+'&limit=50&search='+encodeURIComponent(search)).then(r=>{
     const tbody=document.getElementById('regTable');
     tbody.innerHTML=(r.registrations||[]).map(reg=>'<tr>'+
-      '<td>'+reg.id+'</td><td>'+reg.name+'</td><td>'+reg.class_name+'</td>'+
-      '<td>'+(reg.phone||'-')+'</td><td>'+reg.created_at+'</td>'+
+      '<td>'+reg.id+'</td><td>'+escapeHtml(reg.name)+'</td><td>'+escapeHtml(reg.class_name)+'</td>'+
+      '<td>'+escapeHtml(reg.phone||'-')+'</td><td>'+reg.created_at+'</td>'+
       '<td>'+(reg.used?'<span style="color:var(--success)">已使用</span>':'<span style="color:var(--warning)">未使用</span>')+'</td></tr>').join('');
     renderPagination('regPagination',r.total,r.page,r.limit,page=>{regPage=page;loadRegistrations()});
   });
@@ -488,13 +493,13 @@ function loadPhotos(){
       const typeColor=p.type==='original'?'var(--warning)':'var(--accent)';
       return '<div class="photo-card">'+
       '<div style="position:relative">'+
-      '<img src="'+imgUrl+'" alt="'+p.filename+'" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>%27\'">'+
+      '<img src="'+escapeHtml(imgUrl)+'" alt="'+escapeHtml(p.filename)+'" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>%27\'">'+
       '<span style="position:absolute;top:8px;left:8px;background:'+typeColor+';color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">'+typeLabel+'</span>'+
       '</div>'+
-      '<div class="photo-info"><h4>'+(p.name||'未知用户')+'</h4>'+
-      '<p>'+(p.class_name||'')+(p.phone?' · '+p.phone:'')+'</p>'+
-      '<p>'+(p.style||'原版')+' · '+p.created_at+'</p></div>'+
-      '<div class="photo-actions"><button class="btn btn-sm btn-danger" onclick="deletePhoto(\''+p.filename+'\')">删除</button></div></div>'}).join('');
+      '<div class="photo-info"><h4>'+escapeHtml(p.name||'未知用户')+'</h4>'+
+      '<p>'+escapeHtml(p.class_name||'')+(p.phone?' · '+escapeHtml(p.phone):'')+'</p>'+
+      '<p>'+escapeHtml(p.style||'原版')+' · '+p.created_at+'</p></div>'+
+      '<div class="photo-actions"><button class="btn btn-sm btn-danger" onclick="deletePhoto(\''+escapeHtml(p.filename)+'\')">删除</button></div></div>'}).join('');
     renderPagination('photoPagination',r.total,r.page,r.limit,page=>{photoPage=page;loadPhotos()});
   });
 }
@@ -510,9 +515,9 @@ function deletePhoto(filename){
 function loadStyles(){
   api('/api/admin/styles').then(r=>{
     document.getElementById('styleList').innerHTML=(r.styles||[]).map(s=>'<div class="style-item">'+
-      '<div class="style-info"><h4>'+s.name+' ('+s.id+')</h4><p>'+s.prompt.slice(0,50)+'...</p></div>'+
-      '<div class="style-actions"><button class="btn btn-sm" onclick="editStyle(\''+s.id+'\')">编辑</button>'+
-      '<button class="btn btn-sm btn-danger" onclick="deleteStyle(\''+s.id+'\')">删除</button></div></div>').join('');
+      '<div class="style-info"><h4>'+escapeHtml(s.name)+' ('+escapeHtml(s.id)+')</h4><p>'+escapeHtml(s.prompt.slice(0,50))+'...</p></div>'+
+      '<div class="style-actions"><button class="btn btn-sm" onclick="editStyle(\''+escapeHtml(s.id)+'\')">编辑</button>'+
+      '<button class="btn btn-sm btn-danger" onclick="deleteStyle(\''+escapeHtml(s.id)+'\')">删除</button></div></div>').join('');
   });
 }
 
@@ -540,9 +545,9 @@ function editStyle(id){
     if(!s)return;
     document.getElementById('modalTitle').textContent='编辑风格';
     document.getElementById('modalContent').innerHTML=
-      '<div class="form-group"><label>风格ID</label><input id="styleId" value="'+s.id+'" readonly style="opacity:.5"></div>'+
-      '<div class="form-group"><label>风格名称</label><input id="styleName" value="'+s.name+'"></div>'+
-      '<div class="form-group"><label>提示词</label><textarea id="stylePrompt">'+s.prompt+'</textarea></div>';
+      '<div class="form-group"><label>风格ID</label><input id="styleId" value="'+escapeHtml(s.id)+'" readonly style="opacity:.5"></div>'+
+      '<div class="form-group"><label>风格名称</label><input id="styleName" value="'+escapeHtml(s.name)+'"></div>'+
+      '<div class="form-group"><label>提示词</label><textarea id="stylePrompt">'+escapeHtml(s.prompt)+'</textarea></div>';
     document.getElementById('modalConfirm').onclick=()=>{
       const name=document.getElementById('styleName').value;
       const prompt=document.getElementById('stylePrompt').value;
@@ -567,13 +572,13 @@ function loadDevices(){
     document.getElementById('deviceGrid').innerHTML=(r.devices||[]).map(d=>'<div class="card">'+
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'+
       '<div style="width:10px;height:10px;border-radius:50%;background:'+(d.online?'var(--success)':'var(--text-muted)')+'"></div>'+
-      '<strong>'+(d.name||d.id)+'</strong></div>'+
+      '<strong>'+escapeHtml(d.name||d.id)+'</strong></div>'+
       '<div style="font-size:12px;color:var(--text-dim);line-height:1.8">'+
-      '<div>ID: '+d.id+'</div>'+
-      '<div>页面: '+(d.page||'-')+'</div>'+
-      '<div>版本: '+(d.version||'-')+'</div>'+
+      '<div>ID: '+escapeHtml(d.id)+'</div>'+
+      '<div>页面: '+escapeHtml(d.page||'-')+'</div>'+
+      '<div>版本: '+escapeHtml(d.version||'-')+'</div>'+
       '<div>最后心跳: '+(d.lastSeen?new Date(d.lastSeen).toLocaleTimeString():'-')+'</div></div>'+
-      '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="shutdownDevice(\''+d.id+'\')">关机</button></div></div>').join('');
+      '<div style="margin-top:12px"><button class="btn btn-sm btn-danger" onclick="shutdownDevice(\''+escapeHtml(d.id)+'\')">关机</button></div></div>').join('');
   });
 }
 
@@ -603,7 +608,7 @@ function loadSettings(){
     const env=r.env||{};
     document.getElementById('envList').innerHTML=Object.entries(env).map(([k,v])=>
       '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">'+
-      '<span style="color:var(--accent)">'+k+'</span><span>'+v+'</span></div>').join('');
+      '<span style="color:var(--accent)">'+escapeHtml(k)+'</span><span>'+escapeHtml(v)+'</span></div>').join('');
   });
 }
 
@@ -626,8 +631,22 @@ function renderPagination(id,total,page,limit,callback){
   window['_pag'+id]=callback;
 }
 
-function exportCSV(type){
-  window.open('/api/admin/export/csv?type='+type+'&token='+encodeURIComponent(pwd));
+async function exportCSV(type){
+  try{
+    const resp=await fetch('/api/admin/export/csv?type='+type,{headers:{'X-Admin-Password':pwd}});
+    if(!resp.ok){alert('导出失败: '+resp.status);return}
+    const blob=await resp.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=type+'.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }catch(err){
+    alert('导出失败: '+err.message);
+  }
 }
 
 function toast(msg,type='success'){

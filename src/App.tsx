@@ -1,4 +1,5 @@
-import { useCallback, useState, useEffect, useRef } from 'react'
+import { Component, useCallback, useState, useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAppState } from './state/useAppState'
 import { generateAIImage } from './api/generate'
@@ -9,6 +10,31 @@ import HomePage from './components/HomePage'
 import CameraPage from './components/CameraPage'
 import ComposePage from './components/ComposePage'
 import PrintPage from './components/PrintPage'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#111827', color: 'white', padding: 40 }}>
+          <p style={{ fontSize: 36, marginBottom: 16 }}>⚠️</p>
+          <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>页面出现错误</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>{this.state.error?.message}</p>
+          <button onClick={() => window.location.reload()} style={{ background: '#1565C0', color: 'white', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, cursor: 'pointer' }}>
+            刷新页面
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const STYLE_NAMES: Record<string, string> = {
   guofeng: '古风', guochao: '国潮', jiaopian: '胶片风',
@@ -198,6 +224,21 @@ export default function App() {
         const uploadData = await uploadRes.json()
         imageUrlForQr = uploadData.url || finalImage
         console.log('[handleGenerate] 原版上传完成:', imageUrlForQr?.slice(0, 80))
+        // 原版也要保存到已完成照片目录+数据库
+        apiFetch('/api/save-photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            originalUrl: state.capturedPhoto,
+            aiUrl: state.capturedPhoto,  // 原版模式AI也是原图
+            regId: registration?.id || null,
+            style: 'original'
+          })
+        }).then(r => r.json()).then(r => {
+          console.log('[handleGenerate] 原版保存结果:', r)
+        }).catch(err => {
+          console.error('[handleGenerate] 原版保存失败:', err)
+        })
       } else {
         // AI生成图片（返回远程URL）
         finalImage = await generateAIImage(
@@ -253,6 +294,7 @@ export default function App() {
   }, [state.capturedPhoto, state.mockMode, state.selectedFrame, setSelectedStyle, setResultImage, registration])
 
   return (
+    <ErrorBoundary>
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', backgroundColor: '#F7FAFC' }}>
       {/* API 锁定覆盖层 */}
       {apiLocked && (
@@ -332,5 +374,6 @@ export default function App() {
         )}
       </AnimatePresence>
     </div>
+    </ErrorBoundary>
   )
 }
