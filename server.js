@@ -291,6 +291,11 @@ app.post('/api/upload', async (req, res) => {
   }
 })
 
+// 下载页面（手机端扫码下载带边框的照片）- 必须在 /download/:filename 之前
+app.get('/download', (req, res) => {
+  res.send(getDownloadHTML())
+})
+
 app.get('/download/:filename', (req, res) => {
   const { filename } = req.params
   const filepath = join(uploadsDir, filename)
@@ -500,19 +505,6 @@ app.post('/api/registration/:id/use', (req, res) => {
   res.json({ success: true })
 })
 
-// 保存照片与登记关联
-app.post('/api/save-photo-record', (req, res) => {
-  try {
-    const { regId, filename, style } = req.body
-    if (!filename) return res.status(400).json({ error: '缺少 filename' })
-    db.prepare("INSERT INTO photos (filename, style, reg_id, created_at) VALUES (?, ?, ?, datetime('now'))").run(filename, style || '', regId || null)
-    res.json({ success: true })
-  } catch (err) {
-    console.error('保存照片记录失败:', err)
-    res.status(500).json({ error: '保存失败' })
-  }
-})
-
 // URL白名单验证（复用ALLOWED_PROXY_HOSTS）
 function isAllowedUrl(urlStr) {
   if (urlStr.startsWith('data:')) return true
@@ -551,18 +543,7 @@ app.post('/api/save-photo-record', (req, res) => {
   }
 })
 
-// 短链接：通过照片ID获取照片URL（QR码用）
-app.get('/api/p/:id', (req, res) => {
-  try {
-    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
-    if (!photo) return res.status(404).json({ error: '照片不存在' })
-    res.redirect(photo.filename)
-  } catch (err) {
-    res.status(500).json({ error: '查询失败' })
-  }
-})
-
-// 短链接（QR码用，更短的URL）
+// 短链接（QR码用，重定向到COS URL）
 app.get('/p/:id', (req, res) => {
   try {
     const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
@@ -573,7 +554,7 @@ app.get('/p/:id', (req, res) => {
   }
 })
 
-// API：通过照片ID获取URL（下载页面用）
+// API：通过照片ID获取URL（下载页面用，返回JSON）
 app.get('/api/p/:id', (req, res) => {
   try {
     const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
@@ -670,11 +651,6 @@ app.delete('/api/admin/registrations', authMiddleware, (req, res) => {
 // 登记页面（手机端访问）
 app.get('/register', (req, res) => {
   res.send(getRegisterHTML())
-})
-
-// 下载页面（手机端扫码下载带边框的照片）
-app.get('/download', (req, res) => {
-  res.send(getDownloadHTML())
 })
 
 // ===== 管理页面 =====
@@ -1240,7 +1216,12 @@ var fa=fw/fh;
 var pa=pw/ph;
 var sx=0,sy=0,sw=pw,sh=ph;
 if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
+// 镜像照片（与自助机预览一致）
+ctx.save();
+ctx.translate(fw,0);
+ctx.scale(-1,1);
 ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
+ctx.restore();
 ctx.drawImage(frame,0,0,fw,fh);
 
 var dataUrl=c.toDataURL('image/jpeg',0.95);

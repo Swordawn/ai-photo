@@ -336,12 +336,15 @@ export default function App() {
           }
         } else {
           // COS直传失败，回退到服务端保存
-          savePhotosWithRetry({
+          const fallbackResult = await savePhotosWithRetry({
             originalUrl: state.capturedPhoto,
             aiUrl: state.capturedPhoto,
             regId: registration?.id || null,
             style: 'original'
           })
+          if (fallbackResult && fallbackResult.aiPhotoId) {
+            photoId = fallbackResult.aiPhotoId
+          }
         }
       } else {
         // AI生成图片（返回远程URL）
