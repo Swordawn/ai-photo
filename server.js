@@ -627,15 +627,18 @@ app.post('/api/save-photos', async (req, res) => {
     // 事务写入数据库（保存COS URL或本地路径）
     const originalPath = originalCosUrl || `/uploads/已完成照片/${originalFilename}`
     const aiPath = aiCosUrl || `/uploads/已完成照片/${aiFilename}`
+    let aiPhotoId = null
     const insertPhotos = db.transaction(() => {
       db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalPath, style || '', regId || null)
-      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiPath, style || '', regId || null)
+      const result = db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiPath, style || '', regId || null)
+      aiPhotoId = result.lastInsertRowid
     })
     insertPhotos()
 
     res.json({
       success: true,
       cos: COS_ENABLED,
+      aiPhotoId,
       photos: [
         { type: 'original', filename: originalPath },
         { type: 'ai', filename: aiPath },

@@ -11,7 +11,7 @@ function setSaveQueue(queue: Record<string, unknown>[]) {
 }
 
 // 静默保存照片到服务器（带重试，最多3次，失败存入localStorage下次重试）
-async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3) {
+async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3): Promise<{ aiPhotoId?: number } | false> {
   // 先加入持久化队列
   const queue = getSaveQueue()
   const queueId = Date.now().toString(36)
@@ -32,7 +32,7 @@ async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3
         const q = getSaveQueue().filter((item: Record<string, unknown>) => item._queueId !== queueId)
         setSaveQueue(q)
         console.log('[save] 保存成功')
-        return true
+        return { aiPhotoId: data.aiPhotoId }
       }
       throw new Error(data.error || '保存失败')
     } catch (err) {
@@ -350,12 +350,30 @@ export default function App() {
         // 原版照片直传COS
         const cosUrl = await uploadToCosDirect(state.capturedPhoto)
         // AI照片由服务端保存（远程URL，前端无法直传）
-        savePhotosWithRetry({
+        // 保存后获取照片ID用于QR码
+        const saveResult = await savePhotosWithRetry({
           originalUrl: cosUrl || state.capturedPhoto,
           aiUrl: finalImage,
           regId: registration?.id || null,
           style: styleId
         })
+        // 如果保存成功返回了照片ID，使用它
+        if (saveResult && saveResult.aiPhotoId) {
+          photoId = saveResult.aiPhotoId
+        } else if (cosUrl) {
+          // 回退：用原版COS URL记录到数据库
+          try {
+            const recordRes = await apiFetch('/api/save-photo-record', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cosUrl, style: styleId, regId: registration?.id || null, type: 'ai' }),
+            })
+            const recordData = await recordRes.json()
+            photoId = recordData.id
+          } catch (err) {
+            console.error('[save-record] 失败:', err)
+          }
+        }
         imageUrlForQr = finalImage
       }
 
