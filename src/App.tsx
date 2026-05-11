@@ -183,60 +183,42 @@ export default function App() {
         console.log('[handleGenerate] 原版上传完成:', imageUrlForQr?.slice(0, 80))
       } else {
         // AI生成图片（返回远程URL）
-        const aiImageUrl = await generateAIImage(
+        finalImage = await generateAIImage(
           state.capturedPhoto,
           styleId,
           state.mockMode,
           signal
         )
-        console.log('[handleGenerate] AI生成完成, url:', aiImageUrl?.slice(0, 80))
+        console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
 
-        // 立即下载AI图片转成base64（避免URL过期）
-        try {
-          console.log('[handleGenerate] 下载AI图片转base64...')
-          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(aiImageUrl)}`
-          const imgResp = await apiFetch(proxyUrl)
-          if (imgResp.ok) {
-            const blob = await imgResp.blob()
-            // 转成base64
-            const reader = new FileReader()
-            finalImage = await new Promise((resolve) => {
-              reader.onload = () => resolve(reader.result as string)
-              reader.readAsDataURL(blob)
-            })
-            console.log('[handleGenerate] AI图片转base64完成, 长度:', finalImage.length)
-          } else {
-            // 代理失败，直接用URL
-            finalImage = aiImageUrl
-            console.warn('[handleGenerate] 代理下载失败，使用原始URL')
-          }
-        } catch (err) {
-          finalImage = aiImageUrl
-          console.warn('[handleGenerate] 下载失败，使用原始URL:', err)
-        }
+        // 异步保存照片到服务器（不阻塞显示）
+        console.log('[handleGenerate] 后台保存照片...')
+        apiFetch('/api/save-photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            originalUrl: state.capturedPhoto,  // 原版照片（base64）
+            aiUrl: finalImage,                  // AI照片（远程URL）
+            regId: registration?.id || null,
+            style: styleId
+          })
+        }).then(r => r.json()).then(r => {
+          console.log('[handleGenerate] 照片保存结果:', r)
+        }).catch(err => {
+          console.error('[handleGenerate] 照片保存失败:', err)
+        })
 
         imageUrlForQr = finalImage
       }
 
-      // 保存照片到服务器（所有模式都会触发）
-      console.log('[handleGenerate] 保存照片到服务器...')
-      apiFetch('/api/save-photos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          originalUrl: state.capturedPhoto,  // 原版照片（base64）
-          aiUrl: finalImage,                  // AI照片（base64或URL）
-          regId: registration?.id || null,
-          style: styleId
-        })
-      }).then(r => r.json()).then(r => {
-        console.log('[handleGenerate] 照片保存结果:', r)
-      }).catch(err => {
-        console.error('[handleGenerate] 照片保存失败:', err)
-      })
-
       // 生成下载页面URL（微信扫码可直接下载）
-      const downloadUrl = `/download?url=${encodeURIComponent(imageUrlForQr)}&frame=${state.selectedFrame || 'frame1'}`
+      // 对于AI图片，使用代理URL避免QR码过长
+      let qrUrl = imageUrlForQr
+      if (styleId !== 'original' && imageUrlForQr.startsWith('http')) {
+        // AI图片使用服务器代理URL
+        qrUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrlForQr)}`
+      }
+      const downloadUrl = `/download?url=${encodeURIComponent(qrUrl)}&frame=${state.selectedFrame || 'frame1'}`
       console.log('[handleGenerate] 跳转到结果页')
       setResultImage(finalImage)
       setServerUrl(downloadUrl)
