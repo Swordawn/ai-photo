@@ -811,7 +811,8 @@ app.get('/api/admin/photos-with-info', authMiddleware, async (req, res) => {
         // 检查是否在已完成照片目录
         const finishedPath = join(uploadsDir, '已完成照片', p.filename)
         if (existsSync(finishedPath)) {
-          url = `/uploads/已完成照片/${p.filename}`
+          // 对中文路径进行编码
+          url = `/uploads/${encodeURIComponent('已完成照片')}/${p.filename}`
         }
       }
       return { ...p, url }

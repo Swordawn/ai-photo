@@ -26,6 +26,9 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
   const [captured, setCaptured] = useState<string | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // 摄像头设备列表
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
 
   const cancelCountdown = useCallback(() => {
     if (countdownRef.current) {
@@ -90,6 +93,35 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
     if (captured) onCapture(captured)
   }, [captured, onCapture])
 
+  // 获取摄像头设备列表
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        const allDevices = await navigator.mediaDevices.enumerateDevices()
+        const videoDevices = allDevices.filter(d => d.kind === 'videoinput')
+        setDevices(videoDevices)
+        console.log('[Camera] 可用摄像头:', videoDevices.map(d => d.label || d.deviceId))
+        // 默认选择第一个外接摄像头（非内置）
+        const externalCamera = videoDevices.find(d => !d.label.includes('Integrated') && !d.label.includes('内置'))
+        if (externalCamera) {
+          setSelectedDeviceId(externalCamera.deviceId)
+          console.log('[Camera] 自动选择外接摄像头:', externalCamera.label)
+        } else if (videoDevices.length > 0) {
+          setSelectedDeviceId(videoDevices[0].deviceId)
+        }
+      } catch (err) {
+        console.error('[Camera] 获取设备列表失败:', err)
+      }
+    }
+    getDevices()
+  }, [isCameraReady])
+
+  // 切换摄像头
+  const handleSwitchCamera = useCallback((deviceId: string) => {
+    setSelectedDeviceId(deviceId)
+    setCameraKey(k => k + 1) // 重新加载摄像头
+  }, [])
+
   return (
     <div style={{ height: '100vh', display: 'flex', backgroundColor: '#111827' }}>
       <style>{`
@@ -126,7 +158,10 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
               audio={false}
               screenshotFormat="image/jpeg"
               screenshotQuality={0.9}
-              videoConstraints={{ width: 720, height: 1080, facingMode }}
+              videoConstraints={selectedDeviceId
+                ? { width: 1920, height: 1080, deviceId: selectedDeviceId }
+                : { width: 1920, height: 1080, facingMode }
+              }
               onUserMedia={() => { setIsCameraReady(true); setCameraError(null) }}
               onUserMediaError={(err) => {
                 console.error('[Camera] 摄像头访问失败:', err)
@@ -317,6 +352,32 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
         }}>
           ← 返回首页
         </button>
+
+        {/* 摄像头选择 */}
+        {devices.length > 1 && (
+          <div style={{ padding: '14px 14px 0' }}>
+            <p style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+              选择摄像头
+            </p>
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => handleSwitchCamera(e.target.value)}
+              style={{
+                width: '100%', padding: '8px 10px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: 6, color: 'white', fontSize: 12,
+                outline: 'none',
+              }}
+            >
+              {devices.map((device, i) => (
+                <option key={device.deviceId} value={device.deviceId} style={{ background: '#1f2937' }}>
+                  {device.label || `摄像头 ${i + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* 相框选择 */}
         <div style={{ padding: 14 }}>
