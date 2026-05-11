@@ -31,166 +31,67 @@ export default function PrintPage({
     return () => clearTimeout(timer)
   }, [countdown, onBack])
 
-  // 打印6寸照片
-  const handlePrint = useCallback(async () => {
-    console.log('[Print] ========== 开始打印流程 ==========')
-    setIsDownloading(true)
+  // 打印6寸照片 - 简化版，直接打开图片让用户手动打印
+  const handlePrint = useCallback(() => {
+    console.log('[Print] 打开打印窗口')
 
-    try {
-      // 加载图片
-      const directLoad = (src: string): Promise<HTMLImageElement> => {
-        return new Promise((resolve, reject) => {
-          const img = new Image()
-          img.crossOrigin = 'anonymous'
-          img.onload = () => resolve(img)
-          img.onerror = () => reject(new Error('加载失败'))
-          img.src = src
-        })
-      }
-
-      const loadImage = async (src: string): Promise<HTMLImageElement> => {
-        if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/')) {
-          return directLoad(src)
-        }
-        // 远程URL通过代理
-        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
-        const resp = await apiFetch(proxyUrl)
-        if (!resp.ok) throw new Error(`代理返回 ${resp.status}`)
-        const blob = await resp.blob()
-        const blobUrl = URL.createObjectURL(blob)
-        const img = await directLoad(blobUrl)
-        URL.revokeObjectURL(blobUrl)
-        return img
-      }
-
-      // 加载照片和边框
-      const photo = await loadImage(resultImage)
-      const frame = frameSrc ? await loadImage(frameSrc) : null
-
-      // 创建6寸照片canvas (4x6英寸, 300DPI = 1200x1800像素)
-      const canvas = document.createElement('canvas')
-      canvas.width = 1200
-      canvas.height = 1800
-      const ctx = canvas.getContext('2d')!
-
-      // 白色背景
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-      // 计算照片区域（留出边距）
-      const margin = 40
-      const photoWidth = canvas.width - margin * 2
-      const photoHeight = canvas.height - margin * 2
-
-      // 绘制照片（cover模式）
-      const frameAspect = photoWidth / photoHeight
-      const photoAspect = (photo.naturalWidth || photo.width) / (photo.naturalHeight || photo.height)
-      let sx = 0, sy = 0, sw = photo.naturalWidth || photo.width, sh = photo.naturalHeight || photo.height
-      if (photoAspect > frameAspect) {
-        sw = sh * frameAspect
-        sx = ((photo.naturalWidth || photo.width) - sw) / 2
-      } else {
-        sh = sw / frameAspect
-        sy = ((photo.naturalHeight || photo.height) - sh) / 2
-      }
-      ctx.drawImage(photo, sx, sy, sw, sh, margin, margin, photoWidth, photoHeight)
-
-      // 叠加边框
-      if (frame) {
-        ctx.drawImage(frame, margin, margin, photoWidth, photoHeight)
-      }
-
-      // 创建打印窗口
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-      const printWindow = window.open('', '_blank', 'width=800,height=900')
-      if (!printWindow) {
-        alert('请允许弹出窗口以打印照片')
-        return
-      }
-
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>AI校园写真 - 打印6寸照片</title>
-          <style>
-            @page {
-              size: 6in 4in landscape;
-              margin: 0;
-            }
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-              font-family: 'Microsoft YaHei', sans-serif;
-              background: #f5f5f5;
-              padding: 20px;
-            }
-            .print-area {
-              width: 6in;
-              height: 4in;
-              margin: 0 auto;
-              background: white;
-              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }
-            .print-area img {
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-            }
-            .controls {
-              text-align: center;
-              margin: 20px 0;
-            }
-            .controls p {
-              color: #666;
-              font-size: 14px;
-              margin-bottom: 15px;
-            }
-            .btn {
-              padding: 12px 30px;
-              border: none;
-              border-radius: 8px;
-              font-size: 16px;
-              cursor: pointer;
-              margin: 0 10px;
-            }
-            .btn-print {
-              background: #1565C0;
-              color: white;
-            }
-            .btn-close {
-              background: #eee;
-              color: #666;
-            }
-            @media print {
-              body { background: white; padding: 0; }
-              .controls { display: none; }
-              .print-area { box-shadow: none; width: 100%; height: 100%; }
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="controls">
-            <p>请在打印设置中选择 <strong>4×6英寸 / 10×15cm</strong> 纸张</p>
-            <button class="btn btn-print" onclick="window.print()">🖨️ 打印</button>
-            <button class="btn btn-close" onclick="window.close()">关闭</button>
-          </div>
-          <div class="print-area">
-            <img src="${dataUrl}" />
-          </div>
-        </body>
-        </html>
-      `)
-      printWindow.document.close()
-
-      console.log('[Print] 打印窗口已打开')
-    } catch (err) {
-      console.error('[Print] 打印失败:', err)
-      alert('打印失败，请重试')
-    } finally {
-      setIsDownloading(false)
+    // 直接使用页面上显示的图片（已经是合成后的）
+    const imgElement = document.querySelector('img[alt="AI合成写真"]') as HTMLImageElement
+    if (!imgElement) {
+      alert('找不到照片，请重试')
+      return
     }
-  }, [resultImage, frameSrc])
+
+    // 创建打印窗口，直接使用当前页面的图片
+    const printWindow = window.open('', '_blank', 'width=800,height=700')
+    if (!printWindow) {
+      alert('请允许弹出窗口以打印照片')
+      return
+    }
+
+    // 获取图片URL（已经通过代理加载，可以直接使用）
+    const imgSrc = imgElement.src
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>打印6寸照片</title>
+        <style>
+          @page { size: 6in 4in landscape; margin: 0; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: sans-serif; background: #f0f0f0; padding: 20px; text-align: center; }
+          .tip { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+          .tip p { color: #856404; font-size: 14px; }
+          .photo { width: 6in; height: 4in; margin: 0 auto; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+          .photo img { width: 100%; height: 100%; object-fit: cover; }
+          .btns { margin-top: 20px; }
+          .btn { padding: 12px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 0 10px; }
+          .btn-print { background: #1565C0; color: white; }
+          .btn-close { background: #eee; color: #666; }
+          @media print {
+            body { background: white; padding: 0; }
+            .tip, .btns { display: none; }
+            .photo { box-shadow: none; width: 100%; height: 100%; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="tip">
+          <p>📋 打印设置：选择 <strong>4×6英寸</strong> 或 <strong>10×15cm</strong> 纸张，方向选<strong>横向</strong></p>
+        </div>
+        <div class="photo">
+          <img src="${imgSrc}" crossorigin="anonymous" />
+        </div>
+        <div class="btns">
+          <button class="btn btn-print" onclick="window.print()">🖨️ 打印照片</button>
+          <button class="btn btn-close" onclick="window.close()">关闭窗口</button>
+        </div>
+      </body>
+      </html>
+    `)
+    printWindow.document.close()
+  }, [])
 
   const handleDownload = useCallback(async () => {
     console.log('[Download] ========== 开始下载流程 ==========')
