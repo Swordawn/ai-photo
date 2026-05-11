@@ -1,4 +1,25 @@
 import { Component, useCallback, useState, useEffect, useRef } from 'react'
+
+// 静默保存照片到服务器（带重试，最多3次）
+async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await apiFetch('/api/save-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (data.success) { console.log('[save] 保存成功'); return true }
+      throw new Error(data.error || '保存失败')
+    } catch (err) {
+      console.warn(`[save] 第${i + 1}次保存失败:`, err)
+      if (i < retries - 1) await new Promise(r => setTimeout(r, (i + 1) * 2000))
+    }
+  }
+  console.error('[save] 保存彻底失败，已重试3次')
+  return false
+}
 import type { ReactNode } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { useAppState } from './state/useAppState'
@@ -224,20 +245,12 @@ export default function App() {
         const uploadData = await uploadRes.json()
         imageUrlForQr = uploadData.url || finalImage
         console.log('[handleGenerate] 原版上传完成:', imageUrlForQr?.slice(0, 80))
-        // 原版也要保存到已完成照片目录+数据库
-        apiFetch('/api/save-photos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            originalUrl: state.capturedPhoto,
-            aiUrl: state.capturedPhoto,  // 原版模式AI也是原图
-            regId: registration?.id || null,
-            style: 'original'
-          })
-        }).then(r => r.json()).then(r => {
-          console.log('[handleGenerate] 原版保存结果:', r)
-        }).catch(err => {
-          console.error('[handleGenerate] 原版保存失败:', err)
+        // 静默保存到已完成照片目录+数据库（带重试）
+        savePhotosWithRetry({
+          originalUrl: state.capturedPhoto,
+          aiUrl: state.capturedPhoto,
+          regId: registration?.id || null,
+          style: 'original'
         })
       } else {
         // AI生成图片（返回远程URL）
@@ -249,21 +262,13 @@ export default function App() {
         )
         console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
 
-        // 异步保存照片到服务器（不阻塞显示）
+        // 静默保存照片到服务器（带重试，不阻塞显示）
         console.log('[handleGenerate] 后台保存照片...')
-        apiFetch('/api/save-photos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            originalUrl: state.capturedPhoto,  // 原版照片（base64）
-            aiUrl: finalImage,                  // AI照片（远程URL）
-            regId: registration?.id || null,
-            style: styleId
-          })
-        }).then(r => r.json()).then(r => {
-          console.log('[handleGenerate] 照片保存结果:', r)
-        }).catch(err => {
-          console.error('[handleGenerate] 照片保存失败:', err)
+        savePhotosWithRetry({
+          originalUrl: state.capturedPhoto,
+          aiUrl: finalImage,
+          regId: registration?.id || null,
+          style: styleId
         })
 
         imageUrlForQr = finalImage
