@@ -1124,9 +1124,8 @@ function getDownloadHTML() {
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Noto Sans SC',-apple-system,sans-serif;background:#f5f5f5;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
 .card{background:white;border-radius:16px;padding:20px;max-width:400px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center}
-.preview{position:relative;width:100%;aspect-ratio:2/3;border-radius:12px;overflow:hidden;margin-bottom:16px}
-.preview img{width:100%;height:100%;object-fit:cover}
-.frame{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
+.preview{width:100%;aspect-ratio:2/3;border-radius:12px;overflow:hidden;margin-bottom:16px}
+.preview img{width:100%;height:100%;object-fit:cover;display:block;-webkit-touch-callout:default}
 h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
 .btn{width:100%;padding:14px;background:linear-gradient(135deg,#C9A84C,#FFE566);color:#0d2a6e;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:12px}
 .btn:active{transform:scale(.98)}
@@ -1136,16 +1135,15 @@ h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
 .spinner{width:40px;height:40px;border:3px solid #eee;border-top-color:#1565C0;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style></head><body>
-<div class="card" id="mainCard">
+<div class="card">
 <div class="loading" id="loading">
 <div class="spinner"></div>
-<p style="color:#666;font-size:14px">正在加载图片...</p>
+<p style="color:#666;font-size:14px">正在合成图片...</p>
 </div>
 <div id="content" style="display:none">
 <h1>AI校园写真</h1>
 <div class="preview">
-<img id="photo" src="" alt="照片">
-<img id="frame" class="frame" src="/frames/xiangkuang1.png" alt="相框" style="display:none">
+<img id="result" src="" alt="AI校园写真" draggable="true">
 </div>
 <button class="btn" id="downloadBtn" onclick="download()" disabled>保存到相册</button>
 <p class="tip">长按图片也可保存</p>
@@ -1158,28 +1156,54 @@ var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
 var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
-var originalPhotoSrc=null;
 
-function init(url){
+function loadImg(src){
+return new Promise(function(resolve,reject){
+var img=new Image();
+img.crossOrigin='anonymous';
+img.onload=function(){resolve(img)};
+img.onerror=function(){reject(new Error('图片加载失败: '+src))};
+img.src=src;
+});
+}
+
+function composite(photo,frame,cw,ch){
+var c=document.createElement('canvas');
+c.width=cw;c.height=ch;
+var ctx=c.getContext('2d');
+var pw=photo.naturalWidth||photo.width;
+var ph=photo.naturalHeight||photo.height;
+var fa=cw/ch;
+var pa=pw/ph;
+var sx=0,sy=0,sw=pw,sh=ph;
+if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
+ctx.save();ctx.translate(cw,0);ctx.scale(-1,1);
+ctx.drawImage(photo,sx,sy,sw,sh,0,0,cw,ch);
+ctx.restore();
+ctx.drawImage(frame,0,0,cw,ch);
+return c.toDataURL('image/jpeg',0.92);
+}
+
+async function init(url){
 if(!url){
 document.getElementById('loading').innerHTML='<p style="color:red">缺少图片参数</p>';
 return;
 }
-originalPhotoSrc=url;
-var photo=document.getElementById('photo');
-var frame=document.getElementById('frame');
-photo.src=url;
-frame.src=frameSrc;
-frame.style.display='block';
-// 照片加载完成就显示（CSS叠加边框，不需要Canvas合成）
-photo.onload=function(){
+try{
+var results=await Promise.all([loadImg(url),loadImg(frameSrc)]);
+var photo=results[0],frame=results[1];
+var fw=frame.naturalWidth||1016;
+var fh=frame.naturalHeight||1524;
+var dataUrl=composite(photo,frame,fw,fh);
+var result=document.getElementById('result');
+result.src=dataUrl;
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
 document.getElementById('downloadBtn').disabled=false;
-};
-photo.onerror=function(){
-document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>';
-};
+}catch(e){
+console.error(e);
+document.getElementById('loading').innerHTML='<p style="color:red">图片合成失败</p>';
+}
 }
 
 if(photoId){
@@ -1193,32 +1217,14 @@ document.getElementById('loading').innerHTML='<p style="color:red">加载失败<
 init(photoUrl);
 }
 
-// 点击保存时才Canvas合成（镜像+边框）
 function download(){
 var btn=document.getElementById('downloadBtn');
 btn.disabled=true;
-btn.textContent='正在生成...';
-var photo=document.getElementById('photo');
-var frame=document.getElementById('frame');
+btn.textContent='正在保存...';
+var result=document.getElementById('result');
 try{
-var c=document.createElement('canvas');
-var fw=frame.naturalWidth||1016;
-var fh=frame.naturalHeight||1524;
-c.width=fw;c.height=fh;
-var ctx=c.getContext('2d');
-var pw=photo.naturalWidth||photo.width;
-var ph=photo.naturalHeight||photo.height;
-var fa=fw/fh;
-var pa=pw/ph;
-var sx=0,sy=0,sw=pw,sh=ph;
-if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
-ctx.save();ctx.translate(fw,0);ctx.scale(-1,1);
-ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
-ctx.restore();
-ctx.drawImage(frame,0,0,fw,fh);
-var dataUrl=c.toDataURL('image/jpeg',0.95);
 var a=document.createElement('a');
-a.href=dataUrl;
+a.href=result.src;
 a.download='AI校园写真_'+Date.now()+'.jpg';
 document.body.appendChild(a);
 a.click();
