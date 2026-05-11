@@ -484,8 +484,13 @@ function loadPhotos(){
     const grid=document.getElementById('photoGrid');
     grid.innerHTML=(r.photos||[]).map(p=>{
       const imgUrl=p.url||('/uploads/'+p.filename);
+      const typeLabel=p.type==='original'?'原版':'AI版';
+      const typeColor=p.type==='original'?'var(--warning)':'var(--accent)';
       return '<div class="photo-card">'+
+      '<div style="position:relative">'+
       '<img src="'+imgUrl+'" alt="'+p.filename+'" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>%27\'">'+
+      '<span style="position:absolute;top:8px;left:8px;background:'+typeColor+';color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">'+typeLabel+'</span>'+
+      '</div>'+
       '<div class="photo-info"><h4>'+(p.name||'未知用户')+'</h4>'+
       '<p>'+(p.class_name||'')+(p.phone?' · '+p.phone:'')+'</p>'+
       '<p>'+(p.style||'原版')+' · '+p.created_at+'</p></div>'+

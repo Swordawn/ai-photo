@@ -112,9 +112,15 @@ db.exec(`
     style TEXT,
     frame TEXT,
     reg_id INTEGER,
+    type TEXT DEFAULT 'ai',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `)
+
+// 添加type字段（如果不存在）
+try {
+  db.exec("ALTER TABLE photos ADD COLUMN type TEXT DEFAULT 'ai'")
+} catch {}
 
 // AI 风格管理
 db.exec(`
@@ -463,34 +469,68 @@ app.post('/api/save-photo-record', (req, res) => {
   }
 })
 
-// 保存远程照片到本地（自动下载AI生成的照片）
-app.post('/api/save-remote-photo', async (req, res) => {
+// 保存两份照片（原版+AI版）
+app.post('/api/save-photos', async (req, res) => {
   try {
-    const { url, regId, style } = req.body
-    if (!url) return res.status(400).json({ error: '缺少 url' })
-
-    const filename = `photo_${Date.now()}.jpg`
-    const filepath = join(uploadsDir, '已完成照片', filename)
+    const { originalUrl, aiUrl, regId, style } = req.body
+    if (!originalUrl || !aiUrl) return res.status(400).json({ error: '缺少照片URL' })
 
     // 确保目录存在
-    if (!existsSync(join(uploadsDir, '已完成照片'))) {
-      await mkdir(join(uploadsDir, '已完成照片'), { recursive: true })
+    const finishedDir = join(uploadsDir, '已完成照片')
+    if (!existsSync(finishedDir)) {
+      await mkdir(finishedDir, { recursive: true })
     }
 
-    // 下载远程图片
-    const resp = await fetch(url, { signal: AbortSignal.timeout(30000) })
-    if (!resp.ok) throw new Error(`下载失败: ${resp.status}`)
+    const timestamp = Date.now()
+    const results = []
 
-    const buffer = Buffer.from(await resp.arrayBuffer())
-    await writeFile(filepath, buffer)
+    // 1. 保存原版照片
+    const originalFilename = `original_${timestamp}.jpg`
+    const originalPath = join(finishedDir, originalFilename)
 
-    // 保存到数据库
-    db.prepare("INSERT INTO photos (filename, style, reg_id, created_at) VALUES (?, ?, ?, datetime('now'))").run(filename, style || '', regId || null)
+    if (originalUrl.startsWith('data:')) {
+      // base64格式，直接解码保存
+      const base64Data = originalUrl.replace(/^data:image\/\w+;base64,/, '')
+      const buffer = Buffer.from(base64Data, 'base64')
+      await writeFile(originalPath, buffer)
+      console.log(`[保存原版] ${originalFilename} (${buffer.length} bytes)`)
+    } else {
+      // 远程URL，下载保存
+      const resp = await fetch(originalUrl, { signal: AbortSignal.timeout(30000) })
+      if (!resp.ok) throw new Error(`下载原版失败: ${resp.status}`)
+      const buffer = Buffer.from(await resp.arrayBuffer())
+      await writeFile(originalPath, buffer)
+      console.log(`[保存原版] ${originalFilename} (${buffer.length} bytes)`)
+    }
 
-    console.log(`[保存照片] ${filename} (${buffer.length} bytes)`)
-    res.json({ success: true, filename })
+    // 写入数据库（type=original）
+    db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalFilename, style || '', regId || null)
+    results.push({ type: 'original', filename: originalFilename })
+
+    // 2. 保存AI生成的照片
+    const aiFilename = `ai_${timestamp}.jpg`
+    const aiPath = join(finishedDir, aiFilename)
+
+    if (aiUrl.startsWith('data:')) {
+      const base64Data = aiUrl.replace(/^data:image\/\w+;base64,/, '')
+      const buffer = Buffer.from(base64Data, 'base64')
+      await writeFile(aiPath, buffer)
+      console.log(`[保存AI版] ${aiFilename} (${buffer.length} bytes)`)
+    } else {
+      const resp = await fetch(aiUrl, { signal: AbortSignal.timeout(30000) })
+      if (!resp.ok) throw new Error(`下载AI版失败: ${resp.status}`)
+      const buffer = Buffer.from(await resp.arrayBuffer())
+      await writeFile(aiPath, buffer)
+      console.log(`[保存AI版] ${aiFilename} (${buffer.length} bytes)`)
+    }
+
+    // 写入数据库（type=ai）
+    db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiFilename, style || '', regId || null)
+    results.push({ type: 'ai', filename: aiFilename })
+
+    res.json({ success: true, photos: results })
   } catch (err) {
-    console.error('保存远程照片失败:', err)
+    console.error('保存照片失败:', err)
     res.status(500).json({ error: '保存失败: ' + err.message })
   }
 })

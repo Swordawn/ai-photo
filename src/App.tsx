@@ -192,13 +192,14 @@ export default function App() {
         imageUrlForQr = finalImage
         console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
 
-        // AI生成成功后，自动保存照片到服务器本地
-        console.log('[handleGenerate] 保存照片到服务器...')
-        apiFetch('/api/save-remote-photo', {
+        // AI生成成功后，保存原版+AI版两份照片到服务器
+        console.log('[handleGenerate] 保存照片到服务器（原版+AI版）...')
+        apiFetch('/api/save-photos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            url: finalImage,
+            originalUrl: state.capturedPhoto,  // 原版照片（base64）
+            aiUrl: finalImage,                  // AI生成的照片（远程URL）
             regId: registration?.id || null,
             style: styleId
           })
