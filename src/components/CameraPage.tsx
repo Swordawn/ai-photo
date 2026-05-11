@@ -62,22 +62,9 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
   const handleCapture = useCallback(() => {
     const imageSrc = webcamRef.current?.getScreenshot()
     if (imageSrc) {
-      // 镜像照片（与摄像头预览一致）
-      const img = new Image()
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.width
-        canvas.height = img.height
-        const ctx = canvas.getContext('2d')!
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
-        ctx.drawImage(img, 0, 0)
-        const mirroredSrc = canvas.toDataURL('image/jpeg', 0.95)
-        setFlash(true)
-        setCaptured(mirroredSrc)
-        setTimeout(() => setFlash(false), 600)
-      }
-      img.src = imageSrc
+      setFlash(true)
+      setCaptured(imageSrc)
+      setTimeout(() => setFlash(false), 600)
     }
   }, [])
 
