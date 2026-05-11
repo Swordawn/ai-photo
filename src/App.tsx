@@ -347,24 +347,24 @@ export default function App() {
           }
         }
       } else {
-        // AI生成图片（返回远程URL）
-        finalImage = await generateAIImage(state.capturedPhoto, styleId, state.mockMode, signal)
+        // AI生成 + COS直传并行执行（COS不依赖AI结果）
+        const [aiResult, cosUrl] = await Promise.all([
+          generateAIImage(state.capturedPhoto, styleId, state.mockMode, signal),
+          uploadToCosDirect(state.capturedPhoto)
+        ])
+        finalImage = aiResult
         console.log('[handleGenerate] AI生成完成, url:', finalImage?.slice(0, 80))
-        // 原版照片直传COS
-        const cosUrl = await uploadToCosDirect(state.capturedPhoto)
+        console.log('[handleGenerate] COS直传完成:', cosUrl)
         // AI照片由服务端保存（远程URL，前端无法直传）
-        // 保存后获取照片ID用于QR码
         const saveResult = await savePhotosWithRetry({
           originalUrl: cosUrl || state.capturedPhoto,
           aiUrl: finalImage,
           regId: registration?.id || null,
           style: styleId
         })
-        // 如果保存成功返回了照片ID，使用它
         if (saveResult && saveResult.aiPhotoId) {
           photoId = saveResult.aiPhotoId
         } else if (cosUrl) {
-          // 回退：用原版COS URL记录到数据库
           try {
             const recordRes = await apiFetch('/api/save-photo-record', {
               method: 'POST',
