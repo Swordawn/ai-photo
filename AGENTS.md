@@ -4,13 +4,15 @@
 
 面向河南应用技术职业学院的 AI 校园写真自助机。用户扫码登记，自助机拍照，选择相框和艺术风格，AI 生成写真，扫码下载或打印。
 
-**技术栈：** React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + Express 5 + SQLite + PM2 + Cloudflare Tunnel
+**技术栈：** React 19 + TypeScript + Vite 8 + Tailwind CSS 4 + Express 5 + SQLite + PM2 + Cloudflare Tunnel + 腾讯云 COS
 
 **启动：** `npm start`（Express 后端 + Vite 前端）
 
 **部署地址：** `https://swordawn.cloud`（CF 隧道 HTTPS）
 
 **服务器：** 81.70.134.240 (Ubuntu, 2核2G4M)
+
+**COS 存储：** `ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com`（南京区域）
 
 ---
 
@@ -22,7 +24,7 @@
 
 | 页面 | 组件 | 说明 |
 |------|------|------|
-| 首页 | `HomePage.tsx` | 深蓝主题，校园轮播（CDN），动态QR码，扫码登记后显示欢迎 |
+| 首页 | `HomePage.tsx` | 深蓝主题，校园轮播（COS），动态QR码，扫码登记后显示欢迎 |
 | 拍照 | `CameraPage.tsx` | 摄像头预览+相框叠加，支持外接摄像头选择，3秒倒计时 |
 | 合成 | `ComposePage.tsx` | 照片+相框预览，7种风格选择（原版+6种AI），相框更换 |
 | 结果 | `PrintPage.tsx` | 大图展示，下载/打印6寸照片/二维码扫码，90秒倒计时返回 |
@@ -42,16 +44,20 @@
 ### AI 合成
 1. 拍照 → base64 JPEG（已镜像）
 2. 选择风格 + 相框
-3. 发送到 DashScope `wan2.7-image`（异步任务模式）
-4. 轮询任务状态，获取结果图片URL
-5. 立即显示结果页，后台异步保存照片
+3. **并行执行**：AI生成 + COS直传原版照片
+4. AI生成：发送到 DashScope `wan2.7-image`（异步任务模式，轮询间隔 500ms→1s→2s→3s）
+5. 保存照片到服务器（带重试机制，最多3次，失败存入localStorage下次重试）
+6. 立即显示结果页，后台异步保存照片
 
-### 照片自动保存
+### 照片自动保存（可靠机制）
+- **持久化队列**：保存任务存入 localStorage，页面加载时自动重试
+- **重试机制**：失败最多重试3次，间隔递增（2s→4s→6s）
+- **COS 直传**：原版照片前端直传 COS，不经过服务器
+- **服务端保存**：AI照片由服务端下载后上传 COS + 本地备份
 - **保存两份**：原版照片 + AI生成照片
-- **保存位置**：`/opt/ai-photo/uploads/已完成照片/`
-- **文件命名**：`original_{timestamp}.jpg` + `ai_{timestamp}.jpg`
+- **保存位置**：`/opt/ai-photo/uploads/已完成照片/` + 腾讯云 COS
+- **文件命名**：`original_{timestamp}_{random}.jpg` + `ai_{timestamp}_{random}.jpg`
 - **数据库关联**：photos表关联registrations表（reg_id）
-- **异步保存**：不阻塞用户操作，后台静默保存
 
 ### 镜像处理
 - 摄像头预览：CSS `scaleX(-1)`
@@ -59,7 +65,7 @@
 - 拍照后预览：CSS `scaleX(-1)`（与预览一致）
 - 合成页面：CSS `scaleX(-1)`
 - 结果页面：CSS `scaleX(-1)`
-- 下载/打印：通过代理加载，Canvas合成
+- 下载/打印：Canvas 合成时镜像处理
 
 ---
 
@@ -68,14 +74,15 @@
 ```
 用户浏览器
   ├── 页面 → swordawn.cloud（CF 隧道 → 服务器 3001）
-  ├── 相框 → /frames/*（服务器本地）
-  ├── 照片 → /uploads/*（服务器本地）
+  ├── 相框 → /frames/*（服务器本地 + COS CDN）
+  ├── 照片 → COS CDN（腾讯云对象存储）
   └── API → swordawn.cloud/api/*（CF 隧道 → 服务器）
 ```
 
 **服务器：** 81.70.134.240 (Ubuntu, 2核2G4M)
 **隧道：** Cloudflare Named Tunnel `swordawn.cloud`
-**进程管理：** PM2（开机自启）
+**进程管理：** PM2（开机自启，`pm2 reload` 平滑重载）
+**COS：** 腾讯云对象存储（南京区域，所有图片资源）
 
 ---
 
@@ -98,7 +105,7 @@
 - 服务器信息：CPU型号、内存、系统、Node版本
 
 #### 3. 数据管理
-- 登记记录：搜索、分页、导出CSV
+- 登记记录：搜索、分页、导出CSV（防注入转义）
 - 照片记录：关联登记信息（姓名、班级、手机号、风格）
 - 照片类型标签：原版（黄色）/ AI版（蓝色）
 
@@ -121,7 +128,7 @@
 
 ## 相框系统
 
-**5款相框**（服务器本地 `/frames/`）：
+**5款相框**（服务器本地 `/frames/` + COS CDN）：
 - `xiangkuang1.png` - 相框一
 - `xiangkuang2.png` - 相框二
 - `xiangkuang3.png` - 相框三
@@ -134,6 +141,7 @@
 - 源文件：`src/assets/1-5.png`
 - 公共目录：`public/frames/xiangkuang*.png`
 - 服务器：`/opt/ai-photo/public/frames/`
+- COS：`cos.ap-nanjing.myqcloud.com/frames/`
 
 ---
 
@@ -157,7 +165,7 @@
 
 **打印流程：**
 1. 点击「打印6寸照片」按钮
-2. 弹出打印窗口，显示照片预览
+2. 弹出打印窗口，显示照片预览（Canvas合成：镜像+边框）
 3. 提示用户选择纸张大小
 4. 用户点击「打印照片」按钮
 5. 在打印对话框中设置纸张后打印
@@ -195,6 +203,10 @@ ADMIN_PASSWORD=710317              # 管理后台密码
 CLOUDFLARE_TUNNEL_TOKEN=eyJ...     # CF 命名隧道 Token
 PUBLIC_HOST=swordawn.cloud         # 公网域名
 VITE_PUBLIC_HOST=swordawn.cloud    # 前端用公网域名
+COS_SECRET_ID=AKID...             # 腾讯云 COS SecretId
+COS_SECRET_KEY=DHCy...            # 腾讯云 COS SecretKey
+COS_BUCKET=ai-photo-booth-xxx     # COS 存储桶名称
+COS_REGION=ap-nanjing              # COS 区域
 ```
 
 ---
@@ -208,7 +220,9 @@ VITE_PUBLIC_HOST=swordawn.cloud    # 前端用公网域名
 | GET | `/api/registration/latest` | 自助机轮询最新登记 |
 | POST | `/api/registration/:id/use` | 标记登记已使用 |
 | POST | `/api/upload` | 上传照片（base64） |
-| POST | `/api/save-photos` | 保存原版+AI版照片 |
+| POST | `/api/save-photos` | 保存原版+AI版照片（带重试） |
+| POST | `/api/save-photo-record` | 记录照片到数据库（COS直传后） |
+| POST | `/api/cos-sign` | 生成COS预签名URL（前端直传） |
 | GET | `/api/proxy-image?url=` | 代理远程图片 |
 | POST | `/api/report-page` | 前端上报当前页面 |
 | GET | `/api/machine-status` | 前端读取机器状态 |
@@ -218,6 +232,12 @@ VITE_PUBLIC_HOST=swordawn.cloud    # 前端用公网域名
 |------|------|------|
 | POST | `/api/device/heartbeat` | 设备心跳（30秒） |
 | POST | `/api/device/local-shutdown` | 本地关机 |
+
+### 短链接
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/p/:id` | 短链接重定向到COS URL |
+| GET | `/api/p/:id` | 获取照片URL（JSON格式） |
 
 ### 管理员（需 X-Admin-Password header）
 | 方法 | 路径 | 说明 |
@@ -234,7 +254,7 @@ VITE_PUBLIC_HOST=swordawn.cloud    # 前端用公网域名
 | DELETE | `/api/admin/photos` | 清空所有 |
 | GET | `/api/admin/registrations` | 登记列表（分页/搜索） |
 | GET | `/api/admin/stats` | 统计数据 |
-| GET | `/api/admin/export/csv` | 导出CSV |
+| GET | `/api/admin/export/csv` | 导出CSV（防注入） |
 | GET | `/api/admin/styles` | 风格列表 |
 | POST | `/api/admin/styles` | 添加/修改风格 |
 | DELETE | `/api/admin/styles/:id` | 删除风格 |
@@ -250,9 +270,9 @@ VITE_PUBLIC_HOST=swordawn.cloud    # 前端用公网域名
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/register` | 手机登记页面（HTML） |
-| GET | `/download` | 下载页面（微信扫码用） |
+| GET | `/download` | 下载页面（微信扫码用，CSS叠加边框） |
 | GET | `/booth-admin` | 管理后台（HTML） |
-| ALL | `/dashscope/*` | DashScope API 代理 |
+| ALL | `/dashscope/*` | DashScope API 代理（90秒超时） |
 | GET | `/api/health` | 健康检查 |
 
 ---
@@ -275,7 +295,7 @@ CREATE TABLE registrations (
 ```sql
 CREATE TABLE photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  filename TEXT NOT NULL,
+  filename TEXT NOT NULL,  -- COS URL 或本地路径
   style TEXT,
   frame TEXT,
   reg_id INTEGER,
@@ -310,13 +330,13 @@ ai-photo-booth/
 │   │   ├── AppHeader.tsx       # 通用头部
 │   │   └── FloatingCatkins.tsx # 装饰动画
 │   ├── data/
-│   │   ├── frames.ts           # 5款相框（本地路径）
+│   │   ├── frames.ts           # 5款相框（COS URL）
 │   │   └── styles.ts           # 6种AI风格
 │   ├── api/
 │   │   ├── generate.ts         # DashScope wan2.7-image API
 │   │   └── apiBase.ts          # API 请求封装
 │   ├── state/
-│   │   └── useAppState.ts      # 全局状态 + sessionStorage
+│   │   └── useAppState.ts      # 全局状态
 │   ├── utils/
 │   │   └── compositeFrame.ts   # Canvas 合成（备用）
 │   └── App.tsx                 # 路由 + 登记轮询 + 合成逻辑
@@ -336,13 +356,32 @@ ai-photo-booth/
 ## 安全措施
 
 - CORS 限制为 `PUBLIC_HOST` 域名
-- `/api/proxy-image` 限制为 DashScope OSS 域名白名单
+- `/api/proxy-image` 限制为 DashScope OSS + COS 域名白名单
 - `/api/device/local-shutdown` 仅允许本地 IP 或管理员密码
 - 管理员照片删除有路径穿越检查
 - 注册接口有速率限制（5次/分）和输入长度限制
 - 上传接口有图片格式验证（魔数检查）和大小限制（10MB）
 - JSON body 限制 10MB
 - 默认密码启动警告
+- SSRF 白名单验证（save-photos 端点）
+- CSV 导出防注入转义
+- execSync 输入范围限制（1-1000）
+- 全局错误处理中间件
+- unhandledRejection / uncaughtException 处理
+- React Error Boundary 防白屏
+
+---
+
+## 性能优化
+
+- **轮询间隔**：指数退避 500ms→1s→2s→3s（快任务秒出）
+- **AI生成+COS直传并行**：不互相依赖，同时执行
+- **照片保存并行**：Promise.all 并行下载+写入
+- **DB事务**：两个 INSERT 包在事务中
+- **DashScope代理超时**：90秒
+- **图片资源走COS CDN**：背景图、相框、用户照片全部走COS
+- **下载页面CSS叠加**：不等待Canvas合成，秒加载
+- **localStorage持久化队列**：刷新不丢，自动重试
 
 ---
 
@@ -361,13 +400,13 @@ cd /opt/ai-photo && sudo git pull origin main
 sudo rm -rf /opt/ai-photo/dist
 cd /opt/ai-photo && sudo tar xzf /tmp/dist.tar.gz
 sudo chown -R root:root /opt/ai-photo/dist
-sudo pm2 restart ai-photo
+sudo pm2 reload ai-photo  # 用 reload 不用 restart
 ```
 
 ### PM2 管理
 ```bash
 sudo pm2 list              # 查看进程
-sudo pm2 restart ai-photo  # 重启服务
+sudo pm2 reload ai-photo   # 平滑重载（不中断服务）
 sudo pm2 logs ai-photo     # 查看日志
 sudo pm2 save              # 保存进程列表
 sudo pm2 startup           # 开机自启
@@ -377,18 +416,18 @@ sudo pm2 startup           # 开机自启
 
 ## 已知问题
 
-1. **DashScope图片URL有时效性** - 已通过前端代理下载解决
+1. **DashScope图片URL有时效性** - 已通过服务端下载后上传COS解决
 2. **微信扫码需要复制链接** - 已添加下载页面 `/download`
-3. **相框图片较大** - 已改为服务器本地加载
+3. **相框图片较大** - 已改为COS CDN加载
 
 ---
 
 ## 待开发功能
 
 1. 打印机驱动集成（惠普Tank599）
-2. 对象存储（加快图片访问）
-3. 多语言支持
-4. 数据统计报表
+2. 多语言支持
+3. 数据统计报表
+4. 照片自动清理机制（定期清理旧照片）
 
 ---
 
