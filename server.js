@@ -589,11 +589,11 @@ app.get('/api/p/:id', (req, res) => {
   }
 })
 
-// 直接serve照片文件（同源，无CORS问题，下载页用，带内存缓存）
+// 直接serve照片文件（同源，无CORS问题，下载页用，带内存+磁盘双重缓存）
 app.get('/dl/:id', async (req, res) => {
   try {
     const photoId = req.params.id
-    // 检查内存缓存
+    // 1. 检查内存缓存
     const cached = photoCache.get(photoId)
     if (cached && Date.now() - cached.cachedAt < PHOTO_CACHE_TTL) {
       res.set('Content-Type', cached.contentType)
@@ -602,33 +602,48 @@ app.get('/dl/:id', async (req, res) => {
       return res.send(cached.buffer)
     }
 
-    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(photoId)
+    const photo = db.prepare('SELECT filename, type FROM photos WHERE id = ?').get(photoId)
     if (!photo) return res.status(404).json({ error: '照片不存在' })
     const filename = photo.filename
-    // 本地文件直接serve
+
+    // 2. 本地文件直接serve
     if (filename.startsWith('/uploads/')) {
       const filepath = join(__dirname, filename)
       const resolved = resolve(filepath)
       if (!resolved.startsWith(resolve(uploadsDir))) return res.status(403).json({ error: '禁止访问' })
       if (!existsSync(filepath)) return res.status(404).json({ error: '文件不存在' })
       res.set('Cache-Control', 'public, max-age=3600')
+      res.set('X-Cache', 'LOCAL')
       return res.sendFile(resolved)
     }
-    // COS/DashScope URL → fetch + 缓存到内存
-    if (filename.includes('cos.ap-nanjing.myqcloud.com') || filename.includes('dashscope') || filename.startsWith('http')) {
+
+    // 3. 远程URL → fetch并缓存到本地+内存
+    if (filename.startsWith('http')) {
       console.log(`[dl] fetching from remote: ${filename.slice(0, 80)}`)
       const resp = await fetch(filename, { signal: AbortSignal.timeout(30000) })
       if (!resp.ok) return res.status(502).json({ error: '远程图片获取失败' })
       const buffer = Buffer.from(await resp.arrayBuffer())
       const contentType = resp.headers.get('content-type') || 'image/jpeg'
-      // 存入缓存
+
+      // 保存到本地磁盘
+      const finishedDir = join(uploadsDir, '已完成照片')
+      await mkdir(finishedDir, { recursive: true })
+      const localFilename = `cached_${photoId}_${Date.now()}.jpg`
+      const localFilepath = join(finishedDir, localFilename)
+      await writeFile(localFilepath, buffer)
+      const localDbPath = `/uploads/已完成照片/${localFilename}`
+      // 更新DB，下次直接读本地
+      db.prepare('UPDATE photos SET filename = ? WHERE id = ?').run(localDbPath, photoId)
+      console.log(`[dl] saved to local: ${localDbPath}, ${buffer.length} bytes`)
+
+      // 存入内存缓存
       photoCache.set(photoId, { buffer, contentType, cachedAt: Date.now() })
-      console.log(`[dl] cached photo ${photoId}, ${buffer.length} bytes`)
       res.set('Content-Type', contentType)
       res.set('Cache-Control', 'public, max-age=3600')
       res.set('X-Cache', 'MISS')
       return res.send(buffer)
     }
+
     // 其他URL重定向
     res.redirect(filename)
   } catch (err) {
