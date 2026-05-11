@@ -27,7 +27,7 @@
 | 首页 | `HomePage.tsx` | 深蓝主题，校园轮播（COS），动态QR码，扫码登记后显示欢迎 |
 | 拍照 | `CameraPage.tsx` | 摄像头预览+相框叠加，支持外接摄像头选择，3秒倒计时 |
 | 合成 | `ComposePage.tsx` | 照片+相框预览，7种风格选择（原版+6种AI），相框更换 |
-| 结果 | `PrintPage.tsx` | 大图展示，下载/打印6寸照片/二维码扫码，90秒倒计时返回 |
+| 结果 | `PrintPage.tsx` | 大图展示，下载/打印6寸照片/二维码扫码，90秒倒计时自动reset回首页 |
 
 ---
 
@@ -35,29 +35,38 @@
 
 ### 扫码登记
 1. 首页显示动态 QR 码（指向 `https://swordawn.cloud/register`）
-2. 手机扫码 → 填写姓名/班级/手机号 → 提交到 SQLite
+2. 手机扫码 → 填写姓名/班级/手机号（11位校验）→ 提交到 SQLite
 3. 自助机轮询（5秒）检测到登记 → 显示"欢迎 XXX"
-4. 用户点"开始拍照" → 进入拍照页
-5. 90秒超时自动清除 / 用户点"跳过"清除
-6. 手机端显示90秒倒计时，过期提示重新登记
+4. 用户点"开始拍照" → 标记登记已使用 → 进入拍照页
+5. 90秒超时自动清除（不标记已使用，允许重新扫码）
+6. 跳过按钮不标记已使用，允许重新扫码
 
 ### AI 合成
 1. 拍照 → base64 JPEG（已镜像）
 2. 选择风格 + 相框
 3. **并行执行**：AI生成 + COS直传原版照片
-4. AI生成：发送到 DashScope `wan2.7-image`（异步任务模式，轮询间隔 500ms→1s→2s→3s）
-5. 保存照片到服务器（带重试机制，最多3次，失败存入localStorage下次重试）
+4. AI生成：发送到 DashScope `wan2.7-image`（异步任务模式，轮询间隔 500ms→1s→2s→3s，提交超时60s）
+5. 保存照片到服务器（带重试机制，最多3次，失败存入localStorage下次重试，最多5次后放弃）
 6. 立即显示结果页，后台异步保存照片
+7. ComposePage 卸载时自动 abort 进行中的AI请求
 
-### 照片自动保存（可靠机制）
-- **持久化队列**：保存任务存入 localStorage，页面加载时自动重试
+### 照片保存（可靠机制）
+- **持久化队列**：保存任务存入 localStorage（上限15条），页面加载时自动重试
 - **重试机制**：失败最多重试3次，间隔递增（2s→4s→6s）
+- **放弃机制**：单条任务最多重试5次后永久丢弃，防止队列无限增长
+- **QuotaExceeded保护**：localStorage写入失败时自动清理旧数据
+- **数据库优先本地路径**：DB 存 `/uploads/已完成照片/xxx.jpg`，不存远程URL
 - **COS 直传**：原版照片前端直传 COS，不经过服务器
 - **服务端保存**：AI照片由服务端下载后上传 COS + 本地备份
-- **保存两份**：原版照片 + AI生成照片
 - **保存位置**：`/opt/ai-photo/uploads/已完成照片/` + 腾讯云 COS
-- **文件命名**：`original_{timestamp}_{random}.jpg` + `ai_{timestamp}_{random}.jpg`
-- **数据库关联**：photos表关联registrations表（reg_id）
+
+### 扫码下载（/download 页面）
+- QR码指向 `/download?p=照片ID&frame=相框ID`
+- **`/dl/:id` 端点**：优先读本地文件（毫秒级），远程URL自动fetch+缓存到本地+更新DB
+- **内存缓存**：照片首次fetch后缓存到内存Map（1小时TTL），后续请求直接返回
+- **Canvas预合成**：页面加载时合成镜像+相框，预览=保存=同一张图
+- **iOS检测**：iOS设备提示"长按图片保存"（Safari不支持`<a download>`）
+- **超时+重试**：图片加载20s超时，失败显示重试按钮
 
 ### 镜像处理
 - 摄像头预览：CSS `scaleX(-1)`
@@ -75,7 +84,7 @@
 用户浏览器
   ├── 页面 → swordawn.cloud（CF 隧道 → 服务器 3001）
   ├── 相框 → /frames/*（服务器本地 + COS CDN）
-  ├── 照片 → COS CDN（腾讯云对象存储）
+  ├── 照片 → /dl/:id（服务器本地文件，毫秒级）
   └── API → swordawn.cloud/api/*（CF 隧道 → 服务器）
 ```
 
@@ -90,6 +99,7 @@
 
 **地址：** `https://swordawn.cloud/booth-admin`
 **密码：** `710317`（.env 中 ADMIN_PASSWORD）
+**安全：** 10次密码错误封禁IP 5分钟
 
 ### 功能模块
 
@@ -216,14 +226,15 @@ COS_REGION=ap-nanjing              # COS 区域
 ### 用户端
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/register` | 手机扫码登记 |
+| POST | `/api/register` | 手机扫码登记（含11位手机号校验） |
 | GET | `/api/registration/latest` | 自助机轮询最新登记 |
 | POST | `/api/registration/:id/use` | 标记登记已使用 |
 | POST | `/api/upload` | 上传照片（base64） |
-| POST | `/api/save-photos` | 保存原版+AI版照片（带重试） |
+| POST | `/api/save-photos` | 保存原版+AI版照片（带重试，DB存本地路径） |
 | POST | `/api/save-photo-record` | 记录照片到数据库（COS直传后） |
 | POST | `/api/cos-sign` | 生成COS预签名URL（前端直传） |
-| GET | `/api/proxy-image?url=` | 代理远程图片 |
+| GET | `/api/proxy-image?url=` | 代理远程图片（DashScope+COS白名单） |
+| GET | `/dl/:id` | 直接serve照片（本地文件/远程fetch+缓存+更新DB） |
 | POST | `/api/report-page` | 前端上报当前页面 |
 | GET | `/api/machine-status` | 前端读取机器状态 |
 
@@ -239,7 +250,7 @@ COS_REGION=ap-nanjing              # COS 区域
 | GET | `/p/:id` | 短链接重定向到COS URL |
 | GET | `/api/p/:id` | 获取照片URL（JSON格式） |
 
-### 管理员（需 X-Admin-Password header）
+### 管理员（需 X-Admin-Password header，10次错误封禁5分钟）
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/admin/status` | 系统状态 |
@@ -269,8 +280,8 @@ COS_REGION=ap-nanjing              # COS 区域
 ### 页面
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/register` | 手机登记页面（HTML） |
-| GET | `/download` | 下载页面（微信扫码用，CSS叠加边框） |
+| GET | `/register` | 手机登记页面（HTML，含11位手机号校验） |
+| GET | `/download` | 下载页面（Canvas预合成镜像+相框，iOS长按提示） |
 | GET | `/booth-admin` | 管理后台（HTML） |
 | ALL | `/dashscope/*` | DashScope API 代理（90秒超时） |
 | GET | `/api/health` | 健康检查 |
@@ -295,7 +306,7 @@ CREATE TABLE registrations (
 ```sql
 CREATE TABLE photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  filename TEXT NOT NULL,  -- COS URL 或本地路径
+  filename TEXT NOT NULL,  -- 本地路径 /uploads/已完成照片/xxx.jpg
   style TEXT,
   frame TEXT,
   reg_id INTEGER,
@@ -325,27 +336,27 @@ ai-photo-booth/
 │   ├── components/
 │   │   ├── HomePage.tsx        # 首页（QR码+轮播+欢迎）
 │   │   ├── CameraPage.tsx      # 拍照页（摄像头+相框+倒计时）
-│   │   ├── ComposePage.tsx     # 合成页（风格+相框选择）
-│   │   ├── PrintPage.tsx       # 结果页（下载+打印+QR码）
+│   │   ├── ComposePage.tsx     # 合成页（风格+相框选择，卸载时abort）
+│   │   ├── PrintPage.tsx       # 结果页（下载+打印+QR码，90s自动reset）
 │   │   ├── AppHeader.tsx       # 通用头部
 │   │   └── FloatingCatkins.tsx # 装饰动画
 │   ├── data/
 │   │   ├── frames.ts           # 5款相框（COS URL）
 │   │   └── styles.ts           # 6种AI风格
 │   ├── api/
-│   │   ├── generate.ts         # DashScope wan2.7-image API
+│   │   ├── generate.ts         # DashScope wan2.7-image API（60s提交超时）
 │   │   └── apiBase.ts          # API 请求封装
 │   ├── state/
 │   │   └── useAppState.ts      # 全局状态
 │   ├── utils/
 │   │   └── compositeFrame.ts   # Canvas 合成（备用）
-│   └── App.tsx                 # 路由 + 登记轮询 + 合成逻辑
+│   └── App.tsx                 # 路由 + 登记轮询 + 合成逻辑 + 照片保存队列
 ├── server.js                   # Express 后端（全部后端逻辑）
 ├── admin.html                  # 管理后台HTML
 ├── public/
 │   └── frames/                 # 相框图片（5款）
 ├── uploads/                    # 上传照片目录
-│   └── 已完成照片/              # 合成完成的照片
+│   └── 已完成照片/              # 合成完成的照片（本地备份）
 ├── .env                        # 环境变量
 ├── vite.config.ts              # Vite + 代理配置
 └── package.json                # 依赖配置
@@ -360,6 +371,7 @@ ai-photo-booth/
 - `/api/device/local-shutdown` 仅允许本地 IP 或管理员密码
 - 管理员照片删除有路径穿越检查
 - 注册接口有速率限制（5次/分）和输入长度限制
+- 手机号11位格式校验（`1[3-9]\d{9}`，前后端双重）
 - 上传接口有图片格式验证（魔数检查）和大小限制（10MB）
 - JSON body 限制 10MB
 - 默认密码启动警告
@@ -369,6 +381,8 @@ ai-photo-booth/
 - 全局错误处理中间件
 - unhandledRejection / uncaughtException 处理
 - React Error Boundary 防白屏
+- 管理API暴力破解防护（10次失败封禁5分钟）
+- localStorage保存队列上限（15条）+ 单条重试上限（5次）
 
 ---
 
@@ -379,9 +393,15 @@ ai-photo-booth/
 - **照片保存并行**：Promise.all 并行下载+写入
 - **DB事务**：两个 INSERT 包在事务中
 - **DashScope代理超时**：90秒
-- **图片资源走COS CDN**：背景图、相框、用户照片全部走COS
-- **下载页面CSS叠加**：不等待Canvas合成，秒加载
-- **localStorage持久化队列**：刷新不丢，自动重试
+- **AI提交超时**：60秒
+- **图片资源走COS CDN**：背景图、相框走COS
+- **照片走本地serve**：`/dl/:id` 直接读本地文件（毫秒级）
+- **内存缓存**：远程fetch的照片缓存到内存Map（1小时TTL）
+- **自动缓存**：远程URL首次fetch后保存本地+更新DB，后续秒加载
+- **下载页面Canvas预合成**：镜像+相框一次合成，预览=保存
+- **localStorage持久化队列**：刷新不丢，自动重试，有上限保护
+- **ComposePage卸载abort**：离开页面自动取消AI请求
+- **PrintPage自动reset**：90秒倒计时结束后清理全部状态
 
 ---
 
@@ -416,9 +436,11 @@ sudo pm2 startup           # 开机自启
 
 ## 已知问题
 
-1. **DashScope图片URL有时效性** - 已通过服务端下载后上传COS解决
+1. **DashScope图片URL有时效性** - 已通过DB存本地路径+`/dl/:id`自动缓存解决
 2. **微信扫码需要复制链接** - 已添加下载页面 `/download`
 3. **相框图片较大** - 已改为COS CDN加载
+4. **iOS Safari不支持下载** - 已检测iOS提示长按保存
+5. **旧照片迁移不完整** - 部分旧照片DB记录指向错误的本地文件，`/dl/:id`有自动修复机制
 
 ---
 
