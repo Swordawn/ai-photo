@@ -21,6 +21,34 @@ export default function PrintPage({
   const onBackRef = useRef(onBack)
   useEffect(() => { onBackRef.current = onBack }, [onBack])
 
+  // 预加载远程图片为本地blob URL（加速下载和打印）
+  const [cachedImage, setCachedImage] = useState<string>(resultImage)
+  useEffect(() => {
+    if (!resultImage || resultImage.startsWith('data:') || resultImage.startsWith('blob:') || resultImage.startsWith('/')) {
+      setCachedImage(resultImage)
+      return
+    }
+    let revoked = false
+    let blobUrl: string
+    const preload = async () => {
+      try {
+        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(resultImage)}`
+        const resp = await apiFetch(proxyUrl)
+        if (!resp.ok) throw new Error(`代理返回 ${resp.status}`)
+        const blob = await resp.blob()
+        if (revoked) return
+        blobUrl = URL.createObjectURL(blob)
+        setCachedImage(blobUrl)
+        console.log('[PrintPage] 预加载完成, blob大小:', blob.size)
+      } catch (err) {
+        console.warn('[PrintPage] 预加载失败，使用原始URL:', err)
+        setCachedImage(resultImage)
+      }
+    }
+    preload()
+    return () => { revoked = true; if (blobUrl) URL.revokeObjectURL(blobUrl) }
+  }, [resultImage])
+
   // 确保始终有边框：使用 selectedFrame 或默认第一个边框
   const effectiveFrame = selectedFrame || FRAMES[0]?.id || null
   const frameSrc = effectiveFrame ? getFrameSrc(effectiveFrame) : null
@@ -67,7 +95,7 @@ export default function PrintPage({
     }
 
     try {
-      const photo = await loadImage(resultImage)
+      const photo = await loadImage(cachedImage)
       let printDataUrl: string
 
       if (frameSrc) {
@@ -141,12 +169,11 @@ export default function PrintPage({
       console.error('[Print] 合成失败:', err)
       alert('打印准备失败，请重试')
     }
-    printWindow.document.close()
-  }, [])
+  }, [cachedImage, frameSrc])
 
   const handleDownload = useCallback(async () => {
     console.log('[Download] ========== 开始下载流程 ==========')
-    console.log('[Download] resultImage:', resultImage ? resultImage.slice(0, 80) : 'NULL')
+    console.log('[Download] cachedImage:', cachedImage ? cachedImage.slice(0, 80) : 'NULL')
     console.log('[Download] frameSrc:', frameSrc)
 
     setIsDownloading(true)
@@ -195,7 +222,7 @@ export default function PrintPage({
 
       // 加载照片
       console.log('[Download] 步骤1: 加载照片...')
-      const photo = await loadImage(resultImage, '照片')
+      const photo = await loadImage(cachedImage, '照片')
       console.log('[Download] 照片加载完成, 尺寸:', photo.naturalWidth, 'x', photo.naturalHeight)
 
       // 如果有边框，合成边框后下载
@@ -294,7 +321,7 @@ export default function PrintPage({
       alert('下载失败，请重试')
       setIsDownloading(false)
     }
-  }, [resultImage, frameSrc, selectedFrame])
+  }, [cachedImage, frameSrc, selectedFrame])
 
   return (
     <div style={{ height: '100vh', display: 'flex', backgroundColor: '#fff' }}>
@@ -314,7 +341,7 @@ export default function PrintPage({
           boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
         }}>
           <img
-            src={resultImage}
+            src={cachedImage}
             alt="AI合成写真"
             style={{
               width: '100%', height: '100%',

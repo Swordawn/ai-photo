@@ -293,7 +293,7 @@ app.get('/api/proxy-image', async (req, res) => {
     if (!ALLOWED_PROXY_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
       return res.status(403).json({ error: '不允许的域名' })
     }
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) })
+    const resp = await fetch(url, { signal: AbortSignal.timeout(90000) })
     if (!resp.ok) return res.status(resp.status).json({ error: `远程图片获取失败: ${resp.status}` })
     const buffer = Buffer.from(await resp.arrayBuffer())
     res.set('Content-Type', resp.headers.get('content-type') || 'image/jpeg')
@@ -319,7 +319,7 @@ app.all('/dashscope/{*path}', async (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       fetchOptions.body = JSON.stringify(req.body)
     }
-    fetchOptions.signal = AbortSignal.timeout(25000)
+    fetchOptions.signal = AbortSignal.timeout(90000)
     const resp = await fetch(targetUrl, fetchOptions)
     const data = await resp.text()
     res.status(resp.status)
