@@ -386,9 +386,11 @@ export default function App() {
       } else if (!imageUrlForQr.startsWith('http')) {
         qrUrl = `${host}${imageUrlForQr}`
       }
-      console.log('[handleGenerate] 跳转到结果页, qrUrl:', qrUrl)
+      // QR码用下载页面URL（带边框），不是直接的照片URL
+      const downloadPageUrl = `${host}/download?url=${encodeURIComponent(qrUrl)}&frame=${state.selectedFrame || 'frame1'}`
+      console.log('[handleGenerate] 跳转到结果页, downloadPageUrl:', downloadPageUrl)
       setResultImage(finalImage)
-      setServerUrl(qrUrl)  // QR码用短链接，不是下载页面URL
+      setServerUrl(downloadPageUrl)  // QR码用下载页面URL，带边框
       setErrorMsg(null)
 
       // 标记登记已使用
