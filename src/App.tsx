@@ -377,20 +377,20 @@ export default function App() {
         imageUrlForQr = finalImage
       }
 
-      // 生成下载页面URL（微信扫码可直接下载）
-      // 使用最短的URL格式，方便QR码扫描
+      // QR码用最短格式：/download?p=ID&frame=FRAME
       const host = window.location.origin
-      let qrUrl = imageUrlForQr
+      const frameId = state.selectedFrame || 'frame1'
+      let qrUrl: string
       if (photoId) {
-        qrUrl = `${host}/p/${photoId}`
-      } else if (!imageUrlForQr.startsWith('http')) {
-        qrUrl = `${host}${imageUrlForQr}`
+        // 有照片ID：用最短格式
+        qrUrl = `${host}/download?p=${photoId}&frame=${frameId}`
+      } else {
+        // 没有ID：用完整URL（COS URL）
+        qrUrl = `${host}/download?url=${encodeURIComponent(imageUrlForQr)}&frame=${frameId}`
       }
-      // QR码用下载页面URL（带边框），不是直接的照片URL
-      const downloadPageUrl = `${host}/download?url=${encodeURIComponent(qrUrl)}&frame=${state.selectedFrame || 'frame1'}`
-      console.log('[handleGenerate] 跳转到结果页, downloadPageUrl:', downloadPageUrl)
+      console.log('[handleGenerate] 跳转到结果页, qrUrl:', qrUrl)
       setResultImage(finalImage)
-      setServerUrl(downloadPageUrl)  // QR码用下载页面URL，带边框
+      setServerUrl(qrUrl)
       setErrorMsg(null)
 
       // 标记登记已使用

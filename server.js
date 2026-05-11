@@ -573,6 +573,17 @@ app.get('/p/:id', (req, res) => {
   }
 })
 
+// API：通过照片ID获取URL（下载页面用）
+app.get('/api/p/:id', (req, res) => {
+  try {
+    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
+    if (!photo) return res.status(404).json({ error: '照片不存在' })
+    res.json({ url: photo.filename })
+  } catch (err) {
+    res.status(500).json({ error: '查询失败' })
+  }
+})
+
 // 保存两份照片（原版+AI版，并行保存，优先上传到COS）
 app.post('/api/save-photos', async (req, res) => {
   try {
@@ -1167,14 +1178,18 @@ h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
 <script>
 var params=new URLSearchParams(window.location.search);
 var photoUrl=params.get('url');
+var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
 var COS_BASE='https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
 var frameSrc=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 
+// 如果有照片ID，先获取照片URL
+function init(photoUrl){
 if(!photoUrl){
 document.getElementById('loading').innerHTML='<p style="color:red">缺少图片参数</p>';
-}else{
+return;
+}
 var photo=document.getElementById('photo');
 var frame=document.getElementById('frame');
 var photoLoaded=false,frameLoaded=false;
@@ -1193,6 +1208,18 @@ photo.onload=function(){photoLoaded=true;checkReady()};
 photo.onerror=function(){document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>'};
 frame.onload=function(){frameLoaded=true;checkReady()};
 frame.onerror=function(){frame.style.display='none';checkReady()};
+}
+
+if(photoId){
+// 通过ID获取照片URL
+fetch('/api/p/'+photoId).then(function(r){return r.json()}).then(function(data){
+if(data.url)init(data.url);
+else document.getElementById('loading').innerHTML='<p style="color:red">照片不存在</p>';
+}).catch(function(){
+document.getElementById('loading').innerHTML='<p style="color:red">加载失败</p>';
+});
+}else{
+init(photoUrl);
 }
 
 function download(){
