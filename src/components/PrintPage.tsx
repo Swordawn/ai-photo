@@ -103,11 +103,16 @@ export default function PrintPage({
       const photo = await loadImage(cachedImage)
       let printDataUrl: string
 
+      // 限制Canvas最大分辨率（6寸照片 1200x1800 足够）
+      const MAX_SIZE = 1200
       if (frameSrc) {
         const frame = await loadImage(frameSrc)
+        const fw = frame.naturalWidth || frame.width
+        const fh = frame.naturalHeight || frame.height
+        const scale = Math.min(1, MAX_SIZE / Math.max(fw, fh))
         const canvas = document.createElement('canvas')
-        canvas.width = frame.naturalWidth || frame.width
-        canvas.height = frame.naturalHeight || frame.height
+        canvas.width = Math.round(fw * scale)
+        canvas.height = Math.round(fh * scale)
         const ctx = canvas.getContext('2d')!
 
         const frameAspect = canvas.width / canvas.height
@@ -123,14 +128,17 @@ export default function PrintPage({
         ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
         ctx.restore()
         ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
-        printDataUrl = canvas.toDataURL('image/jpeg', 0.95)
+        printDataUrl = canvas.toDataURL('image/jpeg', 0.9)
       } else {
+        const pw = photo.naturalWidth || photo.width
+        const ph = photo.naturalHeight || photo.height
+        const scale = Math.min(1, MAX_SIZE / Math.max(pw, ph))
         const canvas = document.createElement('canvas')
-        canvas.width = photo.naturalWidth || photo.width
-        canvas.height = photo.naturalHeight || photo.height
+        canvas.width = Math.round(pw * scale)
+        canvas.height = Math.round(ph * scale)
         const ctx = canvas.getContext('2d')!
-        ctx.drawImage(photo, 0, 0)
-        printDataUrl = canvas.toDataURL('image/jpeg', 0.95)
+        ctx.drawImage(photo, 0, 0, canvas.width, canvas.height)
+        printDataUrl = canvas.toDataURL('image/jpeg', 0.9)
       }
 
       const printWindow = window.open('', '_blank', 'width=800,height=700')
