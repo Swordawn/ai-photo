@@ -559,7 +559,7 @@ app.post('/api/save-photo-record', (req, res) => {
   try {
     const { cosUrl, style, regId, type } = req.body
     if (!cosUrl) return res.status(400).json({ error: '缺少cosUrl' })
-    const result = db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, ?, datetime('now'))").run(cosUrl, style || '', regId || null, type || 'ai')
+    const result = db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, ?, datetime('now', '+8 hours'))").run(cosUrl, style || '', regId || null, type || 'ai')
     res.json({ success: true, id: result.lastInsertRowid })
   } catch (err) {
     console.error('保存照片记录失败:', err)
@@ -710,8 +710,8 @@ app.post('/api/save-photos', async (req, res) => {
     const aiPath = localAi
     let aiPhotoId = null
     const insertPhotos = db.transaction(() => {
-      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalPath, style || '', regId || null)
-      const result = db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiPath, style || '', regId || null)
+      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now', '+8 hours'))").run(originalPath, style || '', regId || null)
+      const result = db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now', '+8 hours'))").run(aiPath, style || '', regId || null)
       aiPhotoId = result.lastInsertRowid
     })
     insertPhotos()
