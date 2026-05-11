@@ -12,6 +12,7 @@ export const FRAMES: Frame[] = [
   { id: 'frame2', name: '相框二', src: `${FRAME_BASE}/xiangkuang2.png` },
   { id: 'frame3', name: '相框三', src: `${FRAME_BASE}/xiangkuang3.png` },
   { id: 'frame4', name: '相框四', src: `${FRAME_BASE}/xiangkuang4.png` },
+  { id: 'frame5', name: '相框五', src: `${FRAME_BASE}/xiangkuang5.png` },
 ]
 
 export function getFrameSrc(frameId: string): string {
