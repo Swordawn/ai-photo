@@ -28,6 +28,11 @@ export default function PrintPage({
       setCachedImage(resultImage)
       return
     }
+    // COS URL 直接加载，不走代理
+    if (resultImage.includes('cos.ap-nanjing.myqcloud.com')) {
+      setCachedImage(resultImage)
+      return
+    }
     let revoked = false
     let blobUrl: string
     const preload = async () => {
@@ -194,17 +199,17 @@ export default function PrintPage({
         })
       }
 
-      // 加载图片：本地路径直接加载，远程URL通过代理
+      // 加载图片：COS/本地直接加载，DashScope远程URL通过代理
       const loadImage = async (src: string, label: string): Promise<HTMLImageElement> => {
         console.log(`[Download][${label}] 加载:`, src.slice(0, 80))
 
-        // base64/blob/本地路径 直接加载
-        if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/')) {
+        // base64/blob/本地路径/COS URL 直接加载
+        if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/') || src.includes('cos.ap-nanjing.myqcloud.com')) {
           console.log(`[Download][${label}] 直接加载`)
           return directLoad(src)
         }
 
-        // 远程URL通过代理
+        // DashScope远程URL通过代理
         try {
           const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
           const resp = await apiFetch(proxyUrl)
