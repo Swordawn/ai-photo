@@ -203,6 +203,7 @@ export default function PrintPage({
             style={{
               width: '100%', height: '100%',
               objectFit: 'cover', display: 'block',
+              transform: 'scaleX(-1)',
             }}
           />
           {/* 相框叠加 */}
