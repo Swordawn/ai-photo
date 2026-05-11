@@ -562,6 +562,17 @@ app.get('/api/p/:id', (req, res) => {
   }
 })
 
+// 短链接（QR码用，更短的URL）
+app.get('/p/:id', (req, res) => {
+  try {
+    const photo = db.prepare('SELECT filename FROM photos WHERE id = ?').get(req.params.id)
+    if (!photo) return res.status(404).json({ error: '照片不存在' })
+    res.redirect(photo.filename)
+  } catch (err) {
+    res.status(500).json({ error: '查询失败' })
+  }
+})
+
 // 保存两份照片（原版+AI版，并行保存，优先上传到COS）
 app.post('/api/save-photos', async (req, res) => {
   try {

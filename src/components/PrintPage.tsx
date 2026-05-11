@@ -483,7 +483,7 @@ export default function PrintPage({
           }}>
             <QRCodeSVG
               value={qrUrl || window.location.href}
-              size={80} level="M"
+              size={140} level="L"
             />
             <p style={{ fontSize: 10, color: '#999', textAlign: 'center', marginTop: 6 }}>
               手机扫码保存
