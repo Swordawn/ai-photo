@@ -1157,7 +1157,7 @@ h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
 <img id="photo" src="" alt="照片">
 <img id="frame" class="frame" src="/frames/xiangkuang1.png" alt="相框" style="display:none">
 </div>
-<button class="btn" id="downloadBtn" onclick="download()">保存到相册</button>
+<button class="btn" id="downloadBtn" onclick="download()" disabled>保存到相册</button>
 <p class="tip">长按图片也可保存</p>
 </div>
 </div>
@@ -1174,15 +1174,21 @@ document.getElementById('loading').innerHTML='<p style="color:red">缺少图片�
 }else{
 var photo=document.getElementById('photo');
 var frame=document.getElementById('frame');
+var photoLoaded=false,frameLoaded=false;
 photo.src=photoUrl;
 frame.src=frameSrc;
 frame.style.display='block';
 
-var loaded=0;
-function checkReady(){loaded++;if(loaded>=2){document.getElementById('loading').style.display='none';document.getElementById('content').style.display='block'}}
-photo.onload=checkReady;
+function checkReady(){
+if(photoLoaded&&(frameLoaded||frame.style.display==='none')){
+document.getElementById('loading').style.display='none';
+document.getElementById('content').style.display='block';
+document.getElementById('downloadBtn').disabled=false;
+}
+}
+photo.onload=function(){photoLoaded=true;checkReady()};
 photo.onerror=function(){document.getElementById('loading').innerHTML='<p style="color:red">图片加载失败</p>'};
-frame.onload=checkReady;
+frame.onload=function(){frameLoaded=true;checkReady()};
 frame.onerror=function(){frame.style.display='none';checkReady()};
 }
 
