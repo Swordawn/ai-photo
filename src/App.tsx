@@ -7,16 +7,25 @@ function getSaveQueue(): Record<string, unknown>[] {
   try { return JSON.parse(localStorage.getItem(SAVE_QUEUE_KEY) || '[]') } catch { return [] }
 }
 function setSaveQueue(queue: Record<string, unknown>[]) {
-  localStorage.setItem(SAVE_QUEUE_KEY, JSON.stringify(queue))
+  try {
+    localStorage.setItem(SAVE_QUEUE_KEY, JSON.stringify(queue))
+  } catch (e) {
+    console.warn('[save] localStorage写入失败，清理旧数据后重试')
+    // 保留最近5条，丢弃更早的
+    const trimmed = queue.slice(-5)
+    try { localStorage.setItem(SAVE_QUEUE_KEY, JSON.stringify(trimmed)) } catch {}
+  }
 }
 
 // 静默保存照片到服务器（带重试，最多3次，失败存入localStorage下次重试）
 async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3): Promise<{ aiPhotoId?: number } | false> {
-  // 先加入持久化队列
+  // 先加入持久化队列（限制最大15条，丢弃最旧的）
   const queue = getSaveQueue()
   const queueId = Date.now().toString(36)
   payload._queueId = queueId
+  payload._retryCount = 0
   queue.push(payload)
+  if (queue.length > 15) queue.splice(0, queue.length - 15)
   setSaveQueue(queue)
 
   for (let i = 0; i < retries; i++) {
@@ -40,7 +49,19 @@ async function savePhotosWithRetry(payload: Record<string, unknown>, retries = 3
       if (i < retries - 1) await new Promise(r => setTimeout(r, (i + 1) * 2000))
     }
   }
-  // 失败，保留在localStorage，下次页面加载时重试
+  // 失败，保留在localStorage，下次页面加载时重试（超过5次标记为永久失败）
+  const q = getSaveQueue()
+  const item = q.find((i: Record<string, unknown>) => i._queueId === queueId)
+  if (item) {
+    item._retryCount = ((item._retryCount as number) || 0) + 1
+    if ((item._retryCount as number) >= 5) {
+      // 永久失败，移出队列
+      setSaveQueue(q.filter((i: Record<string, unknown>) => i._queueId !== queueId))
+      console.error('[save] 永久失败，已移出队列')
+      return false
+    }
+    setSaveQueue(q)
+  }
   console.error('[save] 本次保存失败，已加入持久化队列等待重试')
   return false
 }
@@ -52,6 +73,11 @@ async function flushSaveQueue() {
   console.log(`[save] 发现${queue.length}个待保存任务，开始重试...`)
   const remaining: Record<string, unknown>[] = []
   for (const payload of queue) {
+    const retryCount = ((payload._retryCount as number) || 0) + 1
+    if (retryCount > 5) {
+      console.warn('[save] 跳过已超过重试次数的任务')
+      continue
+    }
     try {
       const res = await apiFetch('/api/save-photos', {
         method: 'POST',
@@ -62,9 +88,11 @@ async function flushSaveQueue() {
       if (data.success) {
         console.log('[save] 队列任务恢复成功')
       } else {
+        payload._retryCount = retryCount
         remaining.push(payload)
       }
     } catch {
+      payload._retryCount = retryCount
       remaining.push(payload)
     }
   }
@@ -197,7 +225,7 @@ export default function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // 清除登记（标记为已使用，防止轮询再次拉出）
+  // 清除登记（跳过时不标记已使用，允许重新扫码使用）
   const clearRegistration = useCallback(() => {
     setRegistration(null)
   }, [])
@@ -234,9 +262,12 @@ export default function App() {
       apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
       setRegistration(null)
     }, 90000)
-    return () => {
-      clearTimeout(timeout)
-      // cleanup时也标记已使用（导航离开、新登记替换等场景）
+    return () => { clearTimeout(timeout) }
+  }, [registration])
+
+  // 标记登记已使用（进入拍照流程时调用）
+  const markRegistrationUsed = useCallback(() => {
+    if (registration) {
       apiFetch(`/api/registration/${registration.id}/use`, { method: 'POST' }).catch(() => {})
     }
   }, [registration])
@@ -431,8 +462,8 @@ export default function App() {
         {state.page === 'home' && (
           <HomePage
             key="home"
-            onStart={() => goTo('camera')}
-            onCamera={() => goTo('camera')}
+            onStart={() => { markRegistrationUsed(); goTo('camera') }}
+            onCamera={() => { markRegistrationUsed(); goTo('camera') }}
             registration={registration}
             onClearRegistration={clearRegistration}
           />

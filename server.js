@@ -228,12 +228,24 @@ app.use('/api/proxy-image', apiGateMiddleware)
 app.use('/api/report-page', apiGateMiddleware)
 app.use('/api/save-photos', apiGateMiddleware)
 
-// ===== 管理员认证 =====
+// ===== 管理员认证（含暴力破解防护）=====
+const adminFailMap = new Map()
 function authMiddleware(req, res, next) {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown'
+  const entry = adminFailMap.get(ip)
+  if (entry && entry.count >= 10 && Date.now() < entry.blockUntil) {
+    return res.status(429).json({ error: '尝试次数过多，请5分钟后再试' })
+  }
   const token = req.headers['x-admin-password']
   if (token !== ADMIN_PASSWORD) {
+    const now = Date.now()
+    const cur = adminFailMap.get(ip) || { count: 0, blockUntil: 0 }
+    cur.count++
+    if (cur.count >= 10) cur.blockUntil = now + 300000
+    adminFailMap.set(ip, cur)
     return res.status(401).json({ error: '未授权' })
   }
+  adminFailMap.delete(ip)
   next()
 }
 
@@ -487,6 +499,10 @@ app.post('/api/register', (req, res) => {
   const cleanName = String(name).trim().slice(0, 50)
   const cleanClass = String(className).trim().slice(0, 50)
   const cleanPhone = phone ? String(phone).trim().slice(0, 20) : ''
+  // 手机号格式校验（非空时必须11位数字）
+  if (cleanPhone && !/^1[3-9]\d{9}$/.test(cleanPhone)) {
+    return res.status(400).json({ error: '请输入正确的11位手机号' })
+  }
   const stmt = db.prepare('INSERT INTO registrations (name, class_name, phone) VALUES (?, ?, ?)')
   const result = stmt.run(cleanName, cleanClass, cleanPhone)
   res.json({ success: true, id: result.lastInsertRowid })
@@ -1085,7 +1101,7 @@ button:active{transform:scale(.98)}
 <label>班级 *</label>
 <input type="text" id="className" placeholder="请输入班级" required>
 <label>手机号（选填）</label>
-<input type="tel" id="phone" placeholder="用于接收照片">
+<input type="tel" id="phone" placeholder="用于接收照片" maxlength="11" pattern="^1[3-9]\\d{9}$" title="请输入11位手机号">
 <button type="submit">提交登记</button>
 </form>
 </div>
@@ -1101,6 +1117,7 @@ var name=document.getElementById('name').value.trim();
 var className=document.getElementById('className').value.trim();
 var phone=document.getElementById('phone').value.trim();
 if(!name||!className){showMsg('请填写姓名和班级','err');return}
+if(phone&&!/^1[3-9]\\d{9}$/.test(phone)){showMsg('请输入正确的11位手机号','err');return}
 fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,className:className,phone:phone})})
 .then(function(r){return r.json()})
 .then(function(d){
@@ -1111,7 +1128,7 @@ else{showMsg(d.error||'提交失败','err')}
 };
 function showMsg(t,c){var m=document.getElementById('msg');m.textContent=t;m.className='msg '+c}
 var cdTimer=null;
-function startCountdown(){var sec=90;var el=document.getElementById('cdNum');var msg=document.getElementById('doneMsg');var expired=document.getElementById('expiredMsg');cdTimer=setInterval(function(){sec--;if(el)el.textContent=sec;if(sec<=0){clearInterval(cdTimer);if(msg)msg.style.display='none';if(expired)expired.style.display='block'}},1000)}
+function startCountdown(){var sec=90;var el=document.getElementById('cdNum');var msg=document.getElementById('doneMsg');var expired=document.getElementById('expiredMsg');cdTimer=setInterval(function(){sec--;if(el)el.textContent=sec;if(sec<=0){clearInterval(cdTimer);cdTimer=null;if(msg)msg.style.display='none';if(expired)expired.style.display='block'}},1000)}
 </script></body></html>`
 }
 
@@ -1145,8 +1162,8 @@ h1{font-size:18px;color:#0d2a6e;margin-bottom:8px}
 <div class="preview">
 <img id="result" src="" alt="AI校园写真" draggable="true">
 </div>
-<button class="btn" id="downloadBtn" onclick="download()" disabled>保存到相册</button>
-<p class="tip">长按图片也可保存</p>
+<button class="btn" id="downloadBtn" onclick="download()">保存到相册</button>
+<p class="tip" id="saveTip">长按图片也可保存</p>
 </div>
 </div>
 <script>
@@ -1156,15 +1173,26 @@ var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
 var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
+var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
-function loadImg(src){
+function loadImg(src,timeout){
 return new Promise(function(resolve,reject){
+var timer=setTimeout(function(){reject(new Error('图片加载超时'))},timeout||15000);
 var img=new Image();
 img.crossOrigin='anonymous';
-img.onload=function(){resolve(img)};
-img.onerror=function(){reject(new Error('图片加载失败: '+src))};
+img.onload=function(){clearTimeout(timer);resolve(img)};
+img.onerror=function(){clearTimeout(timer);reject(new Error('图片加载失败'))};
 img.src=src;
 });
+}
+
+function proxyUrl(url){
+if(!url)return url;
+try{
+var u=new URL(url,window.location.origin);
+if(u.origin===window.location.origin)return url;
+return '/api/proxy-image?url='+encodeURIComponent(url);
+}catch(e){return url}
 }
 
 function composite(photo,frame,cw,ch){
@@ -1181,47 +1209,63 @@ ctx.save();ctx.translate(cw,0);ctx.scale(-1,1);
 ctx.drawImage(photo,sx,sy,sw,sh,0,0,cw,ch);
 ctx.restore();
 ctx.drawImage(frame,0,0,cw,ch);
-return c.toDataURL('image/jpeg',0.92);
+var dataUrl=c.toDataURL('image/jpeg',0.92);
+c.width=0;c.height=0;
+return dataUrl;
+}
+
+function showError(msg,retryFn){
+var html='<p style="color:red;margin-bottom:12px">'+msg+'</p>';
+if(retryFn){
+window._retryFn=retryFn;
+html+='<button onclick="window._retryFn()" style="padding:8px 20px;background:#1565C0;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer">重试</button>';
+}
+document.getElementById('loading').innerHTML=html;
 }
 
 async function init(url){
-if(!url){
-document.getElementById('loading').innerHTML='<p style="color:red">缺少图片参数</p>';
-return;
-}
+if(!url){showError('请通过扫描二维码访问此页面');return}
 try{
-var results=await Promise.all([loadImg(url),loadImg(frameSrc)]);
+var loadUrl=proxyUrl(url);
+var results=await Promise.all([loadImg(loadUrl,20000),loadImg(frameSrc,10000)]);
 var photo=results[0],frame=results[1];
 var fw=frame.naturalWidth||1016;
 var fh=frame.naturalHeight||1524;
+if(fw<500)fw=1016;
+if(fh<500)fh=1524;
 var dataUrl=composite(photo,frame,fw,fh);
 var result=document.getElementById('result');
 result.src=dataUrl;
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
-document.getElementById('downloadBtn').disabled=false;
+if(isIOS){
+document.getElementById('downloadBtn').textContent='长按上方图片保存到相册';
+document.getElementById('downloadBtn').style.background='#999';
+document.getElementById('downloadBtn').disabled=true;
+document.getElementById('saveTip').textContent='iOS设备请长按图片保存';
+}
 }catch(e){
 console.error(e);
-document.getElementById('loading').innerHTML='<p style="color:red">图片合成失败</p>';
+showError(e.message||'图片合成失败',function(){init(url)});
 }
 }
 
 if(photoId){
-fetch('/api/p/'+photoId).then(function(r){return r.json()}).then(function(data){
+if(!/^\\d+$/.test(photoId)){showError('无效的照片ID');}
+else{fetch('/api/p/'+photoId).then(function(r){if(!r.ok)throw new Error('服务器错误');return r.json()}).then(function(data){
 if(data.url)init(data.url);
-else document.getElementById('loading').innerHTML='<p style="color:red">照片不存在</p>';
-}).catch(function(){
-document.getElementById('loading').innerHTML='<p style="color:red">加载失败</p>';
-});
-}else{
-init(photoUrl);
+else showError('照片不存在');
+}).catch(function(e){showError(e.message||'加载失败',function(){init(photoUrl)})});
 }
+}else{init(photoUrl)}
 
 function download(){
+if(isIOS)return;
 var btn=document.getElementById('downloadBtn');
+var result=document.getElementById('result');
+if(!result.src||result.src===window.location.href){alert('图片未加载完成');return}
 btn.disabled=true;
 btn.textContent='正在保存...';
-var result=document.getElementById('result');
 try{
 var a=document.createElement('a');
 a.href=result.src;
@@ -1229,11 +1273,11 @@ a.download='AI校园写真_'+Date.now()+'.jpg';
 document.body.appendChild(a);
 a.click();
 document.body.removeChild(a);
-btn.textContent='保存成功！';
+btn.textContent='保存完成';
 setTimeout(function(){btn.textContent='保存到相册';btn.disabled=false},2000);
 }catch(e){
 console.error(e);
-btn.textContent='保存失败，请长按图片保存';
+btn.textContent='请长按图片保存';
 btn.disabled=false;
 }
 }

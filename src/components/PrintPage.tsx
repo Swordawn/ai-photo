@@ -14,12 +14,12 @@ interface Props {
 }
 
 export default function PrintPage({
-  resultImage, originalPhoto, selectedFrame, qrUrl, styleName, onRestart, onBack,
+  resultImage, originalPhoto, selectedFrame, qrUrl, styleName, onRestart, onBack: _onBack,
 }: Props) {
   const [isDownloading, setIsDownloading] = useState(false)
   const [countdown, setCountdown] = useState(90)
-  const onBackRef = useRef(onBack)
-  useEffect(() => { onBackRef.current = onBack }, [onBack])
+  const onRestartRef = useRef(onRestart)
+  useEffect(() => { onRestartRef.current = onRestart }, [onRestart])
 
   // 预加载远程图片为本地blob URL（加速下载和打印）
   const [cachedImage, setCachedImage] = useState<string>(resultImage)
@@ -60,7 +60,7 @@ export default function PrintPage({
   console.log('[PrintPage] selectedFrame:', selectedFrame, 'effectiveFrame:', effectiveFrame, 'frameSrc:', frameSrc)
 
   useEffect(() => {
-    if (countdown <= 0) { onBackRef.current(); return }
+    if (countdown <= 0) { onRestartRef.current(); return }
     const timer = setTimeout(() => setCountdown(c => c - 1), 1000)
     return () => clearTimeout(timer)
   }, [countdown])

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { FRAMES, getFrameSrc } from '../data/frames'
 
 const STYLES = [
@@ -30,6 +30,15 @@ export default function ComposePage({
   const [isGenerating, setIsGenerating] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
   const generatingRef = useRef(false)
+
+  // 组件卸载时取消进行中的AI生成
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
 
   const currentFrameSrc = selectedFrame ? getFrameSrc(selectedFrame) : null
 

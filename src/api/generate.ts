@@ -61,9 +61,9 @@ export async function generateAIImage(
 
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
-  // 30秒超时
+  // 60秒超时
   const timeoutController = new AbortController()
-  const timeoutId = setTimeout(() => timeoutController.abort(), 30000)
+  const timeoutId = setTimeout(() => timeoutController.abort(), 60000)
   const onExternalAbort = () => timeoutController.abort()
   signal?.addEventListener('abort', onExternalAbort)
 
@@ -81,7 +81,7 @@ export async function generateAIImage(
     })
   } catch (err) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    throw new Error('提交任务超时（30秒），请检查网络后重试')
+    throw new Error('提交任务超时，请检查网络后重试')
   } finally {
     clearTimeout(timeoutId)
     signal?.removeEventListener('abort', onExternalAbort)
