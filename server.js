@@ -117,7 +117,6 @@ setInterval(() => {
   // 清理过期照片缓存
   for (const [id, entry] of photoCache) {
     if (now - entry.cachedAt > PHOTO_CACHE_TTL) photoCache.delete(id)
-    }
   }
 }, 300000)
 
