@@ -1175,24 +1175,26 @@ var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkua
 var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
+function isCrossOrigin(url){
+if(!url)return false;
+if(url.startsWith('data:')||url.startsWith('blob:')||url.startsWith('/'))return false;
+try{return new URL(url,window.location.origin).origin!==window.location.origin}catch{return false}
+}
+
 function loadImg(src,timeout){
 return new Promise(function(resolve,reject){
 var timer=setTimeout(function(){reject(new Error('图片加载超时'))},timeout||15000);
 var img=new Image();
-img.crossOrigin='anonymous';
+if(isCrossOrigin(src))img.crossOrigin='anonymous';
 img.onload=function(){clearTimeout(timer);resolve(img)};
 img.onerror=function(){clearTimeout(timer);reject(new Error('图片加载失败'))};
 img.src=src;
 });
 }
 
-function proxyUrl(url){
-if(!url)return url;
-try{
-var u=new URL(url,window.location.origin);
-if(u.origin===window.location.origin)return url;
+function proxyIfNeeded(url){
+if(!url||!isCrossOrigin(url))return url;
 return '/api/proxy-image?url='+encodeURIComponent(url);
-}catch(e){return url}
 }
 
 function composite(photo,frame,cw,ch){
@@ -1226,8 +1228,8 @@ document.getElementById('loading').innerHTML=html;
 async function init(url){
 if(!url){showError('请通过扫描二维码访问此页面');return}
 try{
-var loadUrl=proxyUrl(url);
-var results=await Promise.all([loadImg(loadUrl,20000),loadImg(frameSrc,10000)]);
+var loadUrl=proxyIfNeeded(url);
+var results=await Promise.all([loadImg(loadUrl,20000),loadImg(frameSrc,5000)]);
 var photo=results[0],frame=results[1];
 var fw=frame.naturalWidth||1016;
 var fh=frame.naturalHeight||1524;
@@ -1255,7 +1257,7 @@ if(!/^\\d+$/.test(photoId)){showError('无效的照片ID');}
 else{fetch('/api/p/'+photoId).then(function(r){if(!r.ok)throw new Error('服务器错误');return r.json()}).then(function(data){
 if(data.url)init(data.url);
 else showError('照片不存在');
-}).catch(function(e){showError(e.message||'加载失败',function(){init(photoUrl)})});
+}).catch(function(e){showError(e.message||'加载失败',function(){location.reload()})});
 }
 }else{init(photoUrl)}
 
