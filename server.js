@@ -1175,8 +1175,32 @@ photo.src=photoUrl;
 frame.src=frameSrc;
 frame.style.display='block';
 
+// 合成预览图（带边框），替换img src，这样长按保存也是带边框的
+function compositePreview(){
+if(!photoLoaded||!frameOk) return;
+try{
+var c=document.createElement('canvas');
+var fw=frame.naturalWidth||1016;
+var fh=frame.naturalHeight||1524;
+c.width=fw;c.height=fh;
+var ctx=c.getContext('2d');
+var pw=photo.naturalWidth||photo.width;
+var ph=photo.naturalHeight||photo.height;
+var fa=fw/fh;
+var pa=pw/ph;
+var sx=0,sy=0,sw=pw,sh=ph;
+if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
+ctx.save();ctx.translate(fw,0);ctx.scale(-1,1);
+ctx.drawImage(photo,sx,sy,sw,sh,0,0,fw,fh);
+ctx.restore();
+ctx.drawImage(frame,0,0,fw,fh);
+photo.src=c.toDataURL('image/jpeg',0.95);
+}catch(e){console.error('合成预览失败:',e)}
+}
+
 function checkReady(){
 if(photoLoaded&&((frameLoaded&&frameOk)||frame.style.display==='none')){
+compositePreview();
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
 document.getElementById('downloadBtn').disabled=false;
