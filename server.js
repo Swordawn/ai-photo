@@ -9,8 +9,35 @@ import os from 'os'
 import { spawn, execSync } from 'child_process'
 import { config } from 'dotenv'
 import Database from 'better-sqlite3'
+import COS from 'cos-nodejs-sdk-v5'
 
 config()
+
+// 腾讯云 COS 客户端
+const cos = new COS({
+  SecretId: process.env.COS_SECRET_ID,
+  SecretKey: process.env.COS_SECRET_KEY,
+})
+const COS_BUCKET = process.env.COS_BUCKET
+const COS_REGION = process.env.COS_REGION
+const COS_ENABLED = !!(COS_BUCKET && COS_REGION)
+
+// 上传文件到 COS
+async function uploadToCOS(key, buffer, contentType = 'image/jpeg') {
+  if (!COS_ENABLED) return null
+  return new Promise((resolve, reject) => {
+    cos.putObject({
+      Bucket: COS_BUCKET,
+      Region: COS_REGION,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }, (err, data) => {
+      if (err) reject(err)
+      else resolve(`https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${key}`)
+    })
+  })
+}
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
@@ -494,7 +521,7 @@ function isAllowedUrl(urlStr) {
   } catch { return false }
 }
 
-// 保存两份照片（原版+AI版，并行保存）
+// 保存两份照片（原版+AI版，并行保存，优先上传到COS）
 app.post('/api/save-photos', async (req, res) => {
   try {
     const { originalUrl, aiUrl, regId, style } = req.body
@@ -510,8 +537,6 @@ app.post('/api/save-photos', async (req, res) => {
     const timestamp = Date.now() + '_' + Math.random().toString(36).slice(2, 8)
     const originalFilename = `original_${timestamp}.jpg`
     const aiFilename = `ai_${timestamp}.jpg`
-    const originalPath = join(finishedDir, originalFilename)
-    const aiPath = join(finishedDir, aiFilename)
 
     // 辅助函数：获取图片buffer
     async function fetchImageBuffer(url, referer) {
@@ -532,27 +557,36 @@ app.post('/api/save-photos', async (req, res) => {
       fetchImageBuffer(aiUrl, 'https://dashscope.aliyuncs.com/'),
     ])
 
-    // 并行写入文件
-    await Promise.all([
-      writeFile(originalPath, originalBuffer),
-      writeFile(aiPath, aiBuffer),
+    // 并行上传到COS + 写入本地文件
+    const [originalCosUrl, aiCosUrl] = await Promise.all([
+      COS_ENABLED ? uploadToCOS(`photos/${originalFilename}`, originalBuffer).catch(e => { console.error('[COS] 原版上传失败:', e); return null }) : null,
+      COS_ENABLED ? uploadToCOS(`photos/${aiFilename}`, aiBuffer).catch(e => { console.error('[COS] AI版上传失败:', e); return null }) : null,
     ])
 
-    console.log(`[保存原版] ${originalFilename} (${originalBuffer.length} bytes)`)
-    console.log(`[保存AI版] ${aiFilename} (${aiBuffer.length} bytes)`)
+    // 本地备份（COS可用时作为备份，COS不可用时作为主存储）
+    await Promise.all([
+      writeFile(join(finishedDir, originalFilename), originalBuffer),
+      writeFile(join(finishedDir, aiFilename), aiBuffer),
+    ])
 
-    // 事务写入数据库
+    console.log(`[保存] 原版: ${originalFilename} (${originalBuffer.length} bytes) COS:${!!originalCosUrl}`)
+    console.log(`[保存] AI版: ${aiFilename} (${aiBuffer.length} bytes) COS:${!!aiCosUrl}`)
+
+    // 事务写入数据库（保存COS URL或本地路径）
+    const originalPath = originalCosUrl || `/uploads/已完成照片/${originalFilename}`
+    const aiPath = aiCosUrl || `/uploads/已完成照片/${aiFilename}`
     const insertPhotos = db.transaction(() => {
-      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalFilename, style || '', regId || null)
-      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiFilename, style || '', regId || null)
+      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now'))").run(originalPath, style || '', regId || null)
+      db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'ai', datetime('now'))").run(aiPath, style || '', regId || null)
     })
     insertPhotos()
 
     res.json({
       success: true,
+      cos: COS_ENABLED,
       photos: [
-        { type: 'original', filename: originalFilename },
-        { type: 'ai', filename: aiFilename },
+        { type: 'original', filename: originalPath },
+        { type: 'ai', filename: aiPath },
       ]
     })
   } catch (err) {

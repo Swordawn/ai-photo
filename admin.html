@@ -488,7 +488,8 @@ function loadPhotos(){
   api('/api/admin/photos-with-info?page='+photoPage+'&limit=50').then(r=>{
     const grid=document.getElementById('photoGrid');
     grid.innerHTML=(r.photos||[]).map(p=>{
-      const imgUrl=p.url||('/uploads/'+p.filename);
+      // filename可能是COS URL(https://开头)或本地路径
+      const imgUrl=p.filename.startsWith('http')?p.filename:('/uploads/'+p.filename);
       const typeLabel=p.type==='original'?'原版':'AI版';
       const typeColor=p.type==='original'?'var(--warning)':'var(--accent)';
       return '<div class="photo-card">'+
