@@ -360,13 +360,16 @@ export default function App() {
       }
 
       // 生成下载页面URL（微信扫码可直接下载）
-      // 优先使用短链接，没有ID时直接用COS URL
+      // 优先使用短链接（完整URL），没有ID时直接用COS URL
+      const host = window.location.origin
       let qrUrl = imageUrlForQr
       if (photoId) {
-        qrUrl = `/api/p/${photoId}`
+        qrUrl = `${host}/api/p/${photoId}`
+      } else if (!imageUrlForQr.startsWith('http')) {
+        qrUrl = `${host}${imageUrlForQr}`
       }
       // COS URL 直接用，不走代理
-      const downloadUrl = `/download?url=${encodeURIComponent(qrUrl)}&frame=${state.selectedFrame || 'frame1'}`
+      const downloadUrl = `${host}/download?url=${encodeURIComponent(qrUrl)}&frame=${state.selectedFrame || 'frame1'}`
       console.log('[handleGenerate] 跳转到结果页')
       setResultImage(finalImage)
       setServerUrl(downloadUrl)
