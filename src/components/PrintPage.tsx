@@ -55,7 +55,7 @@ export default function PrintPage({
   }, [resultImage])
 
   // 确保始终有边框：使用 selectedFrame 或默认第一个边框
-  const effectiveFrame = selectedFrame || FRAMES[0]?.id || null
+  const effectiveFrame = useMemo(() => selectedFrame || FRAMES[0]?.id || null, [selectedFrame])
   const frameSrc = useMemo(() => effectiveFrame ? getFrameSrc(effectiveFrame) : null, [effectiveFrame])
   const frameProxySrc = useMemo(() => effectiveFrame ? getFrameProxySrc(effectiveFrame) : null, [effectiveFrame])
 
