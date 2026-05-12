@@ -69,279 +69,133 @@ export default function PrintPage({
     return () => clearTimeout(timer)
   }, [countdown])
 
-  // 打印6寸照片 - 用Canvas合成照片+相框后打印
+  // 页面加载时预加载相框图片（点击下载/打印时直接用，不再等待加载）
+  const preloadedFrameRef = useRef<HTMLImageElement | null>(null)
+  useEffect(() => {
+    if (!frameProxySrc) { preloadedFrameRef.current = null; return }
+    let cancelled = false
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => { if (!cancelled) preloadedFrameRef.current = img }
+    img.src = frameProxySrc
+    return () => { cancelled = true }
+  }, [frameProxySrc])
+
+  // 通用：加载照片Image对象
+  const loadPhotoImage = useCallback(async (src: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('照片加载失败'))
+      img.src = src
+    })
+  }, [])
+
+  // 通用：Canvas合成 → Blob（异步，不阻塞主线程）
+  const compositeToBlob = useCallback(async (photo: HTMLImageElement, frame: HTMLImageElement | null): Promise<Blob> => {
+    const MAX_SIZE = 1200
+    let canvasW: number, canvasH: number
+
+    if (frame) {
+      const fw = frame.naturalWidth || frame.width
+      const fh = frame.naturalHeight || frame.height
+      const scale = Math.min(1, MAX_SIZE / Math.max(fw, fh))
+      canvasW = Math.round(fw * scale)
+      canvasH = Math.round(fh * scale)
+    } else {
+      const pw = photo.naturalWidth || photo.width
+      const ph = photo.naturalHeight || photo.height
+      const scale = Math.min(1, MAX_SIZE / Math.max(pw, ph))
+      canvasW = Math.round(pw * scale)
+      canvasH = Math.round(ph * scale)
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = canvasW
+    canvas.height = canvasH
+    const ctx = canvas.getContext('2d')!
+
+    // 绘制照片（cover裁剪，不镜像）
+    const frameAspect = canvasW / canvasH
+    const photoAspect = (photo.naturalWidth || photo.width) / (photo.naturalHeight || photo.height)
+    let sx = 0, sy = 0, sw = photo.naturalWidth || photo.width, sh = photo.naturalHeight || photo.height
+    if (photoAspect > frameAspect) { sw = sh * frameAspect; sx = ((photo.naturalWidth || photo.width) - sw) / 2 }
+    else { sh = sw / frameAspect; sy = ((photo.naturalHeight || photo.height) - sh) / 2 }
+    ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvasW, canvasH)
+
+    if (frame) ctx.drawImage(frame, 0, 0, canvasW, canvasH)
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Canvas编码失败')), 'image/jpeg', 0.9)
+    })
+  }, [])
+
+  // Blob → 下载
+  const downloadBlob = useCallback((blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [])
+
+  // 打印6寸照片 - 预加载相框+toBlob异步编码
   const handlePrint = useCallback(async () => {
-    console.log('[Print] 开始合成打印图片')
-
-    const directLoad = (src: string): Promise<HTMLImageElement> => {
-      return new Promise((resolve, reject) => {
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.onload = () => resolve(img)
-        img.onerror = () => reject(new Error('加载失败'))
-        img.src = src
-      })
-    }
-
-    const loadImage = async (src: string): Promise<HTMLImageElement> => {
-      if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/')) {
-        return directLoad(src)
-      }
-      try {
-        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
-        const resp = await apiFetch(proxyUrl)
-        if (!resp.ok) throw new Error(`代理返回 ${resp.status}`)
-        const blob = await resp.blob()
-        const blobUrl = URL.createObjectURL(blob)
-        try {
-          return await directLoad(blobUrl)
-        } finally {
-          URL.revokeObjectURL(blobUrl)
-        }
-      } catch {
-        return directLoad(src)
-      }
-    }
-
     try {
-      const photo = await loadImage(cachedImage)
-      let printDataUrl: string
-
-      // 限制Canvas最大分辨率（6寸照片 1200x1800 足够）
-      const MAX_SIZE = 1200
-      if (frameProxySrc) {
-        const frame = await loadImage(frameProxySrc)
-        const fw = frame.naturalWidth || frame.width
-        const fh = frame.naturalHeight || frame.height
-        const scale = Math.min(1, MAX_SIZE / Math.max(fw, fh))
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.round(fw * scale)
-        canvas.height = Math.round(fh * scale)
-        const ctx = canvas.getContext('2d')!
-
-        const frameAspect = canvas.width / canvas.height
-        const photoAspect = (photo.naturalWidth || photo.width) / (photo.naturalHeight || photo.height)
-        let sx = 0, sy = 0, sw = photo.naturalWidth || photo.width, sh = photo.naturalHeight || photo.height
-        if (photoAspect > frameAspect) { sw = sh * frameAspect; sx = ((photo.naturalWidth || photo.width) - sw) / 2 }
-        else { sh = sw / frameAspect; sy = ((photo.naturalHeight || photo.height) - sh) / 2 }
-
-        // 直接绘制照片（不镜像，保存时文字正确）
-        ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
-        printDataUrl = canvas.toDataURL('image/jpeg', 0.9)
-      } else {
-        const pw = photo.naturalWidth || photo.width
-        const ph = photo.naturalHeight || photo.height
-        const scale = Math.min(1, MAX_SIZE / Math.max(pw, ph))
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.round(pw * scale)
-        canvas.height = Math.round(ph * scale)
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(photo, 0, 0, canvas.width, canvas.height)
-        printDataUrl = canvas.toDataURL('image/jpeg', 0.9)
-      }
+      const photo = await loadPhotoImage(cachedImage)
+      const frame = preloadedFrameRef.current
+      const blob = await compositeToBlob(photo, frame)
+      const dataUrl = URL.createObjectURL(blob)
 
       const printWindow = window.open('', '_blank', 'width=800,height=700')
-      if (!printWindow) { alert('请允许弹出窗口以打印照片'); return }
+      if (!printWindow) { alert('请允许弹出窗口以打印照片'); URL.revokeObjectURL(dataUrl); return }
 
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>打印6寸照片</title>
-          <style>
-            @page { size: 6in 4in landscape; margin: 0; }
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: sans-serif; background: #f0f0f0; padding: 20px; text-align: center; }
-            .tip { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-            .tip p { color: #856404; font-size: 14px; }
-            .photo { width: 6in; height: 4in; margin: 0 auto; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
-            .photo img { width: 100%; height: 100%; object-fit: cover; }
-            .btns { margin-top: 20px; }
-            .btn { padding: 12px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 0 10px; }
-            .btn-print { background: #1565C0; color: white; }
-            .btn-close { background: #eee; color: #666; }
-            @media print {
-              body { background: white; padding: 0; }
-              .tip, .btns { display: none; }
-              .photo { box-shadow: none; width: 100%; height: 100%; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="tip">
-            <p>📋 打印设置：选择 <strong>4×6英寸</strong> 或 <strong>10×15cm</strong> 纸张，方向选<strong>横向</strong></p>
-          </div>
-          <div class="photo">
-            <img src="${printDataUrl}" />
-          </div>
-          <div class="btns">
-            <button class="btn btn-print" onclick="window.print()">🖨️ 打印照片</button>
-            <button class="btn btn-close" onclick="window.close()">关闭窗口</button>
-          </div>
-        </body>
-        </html>
-      `)
+      printWindow.document.write(`<!DOCTYPE html><html><head><title>打印6寸照片</title><style>
+        @page { size: 6in 4in landscape; margin: 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: sans-serif; background: #f0f0f0; padding: 20px; text-align: center; }
+        .tip { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .tip p { color: #856404; font-size: 14px; }
+        .photo { width: 6in; height: 4in; margin: 0 auto; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .photo img { width: 100%; height: 100%; object-fit: cover; }
+        .btns { margin-top: 20px; }
+        .btn { padding: 12px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 0 10px; }
+        .btn-print { background: #1565C0; color: white; }
+        .btn-close { background: #eee; color: #666; }
+        @media print { body { background: white; padding: 0; } .tip, .btns { display: none; } .photo { box-shadow: none; width: 100%; height: 100%; } }
+      </style></head><body>
+        <div class="tip"><p>📋 打印设置：选择 <strong>4×6英寸</strong> 或 <strong>10×15cm</strong> 纸张，方向选<strong>横向</strong></p></div>
+        <div class="photo"><img src="${dataUrl}" /></div>
+        <div class="btns">
+          <button class="btn btn-print" onclick="window.print()">🖨️ 打印照片</button>
+          <button class="btn btn-close" onclick="window.close()">关闭窗口</button>
+        </div>
+      </body></html>`)
       printWindow.document.close()
     } catch (err) {
       console.error('[Print] 合成失败:', err)
       alert('打印准备失败，请重试')
     }
-  }, [cachedImage, frameSrc])
+  }, [cachedImage, loadPhotoImage, compositeToBlob])
 
   const handleDownload = useCallback(async () => {
-    console.log('[Download] ========== 开始下载流程 ==========')
-    console.log('[Download] cachedImage:', cachedImage ? cachedImage.slice(0, 80) : 'NULL')
-    console.log('[Download] frameSrc:', frameSrc)
-
     setIsDownloading(true)
     try {
-      // 直接加载图片
-      const directLoad = (src: string): Promise<HTMLImageElement> => {
-        return new Promise((resolve, reject) => {
-          const img = new Image()
-          img.crossOrigin = 'anonymous'
-          img.onload = () => resolve(img)
-          img.onerror = () => reject(new Error('加载失败'))
-          img.src = src
-        })
-      }
-
-      // 加载图片：COS/本地直接加载，DashScope远程URL通过代理
-      const loadImage = async (src: string, label: string): Promise<HTMLImageElement> => {
-        console.log(`[Download][${label}] 加载:`, src.slice(0, 80))
-
-        // base64/blob/本地路径/COS URL 直接加载
-        if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('/') || src.includes('cos.ap-nanjing.myqcloud.com')) {
-          console.log(`[Download][${label}] 直接加载`)
-          return directLoad(src)
-        }
-
-        // DashScope远程URL通过代理
-        try {
-          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(src)}`
-          const resp = await apiFetch(proxyUrl)
-          if (!resp.ok) throw new Error(`代理返回 ${resp.status}`)
-          const blob = await resp.blob()
-          if (blob.size === 0) throw new Error('blob为空')
-          console.log(`[Download][${label}] 代理成功, blob大小: ${blob.size}`)
-          const blobUrl = URL.createObjectURL(blob)
-          try {
-            const img = await directLoad(blobUrl)
-            return img
-          } finally {
-            URL.revokeObjectURL(blobUrl)
-          }
-        } catch (proxyErr) {
-          console.warn(`[Download][${label}] 代理失败，尝试直接加载:`, proxyErr)
-          return directLoad(src)
-        }
-      }
-
-      // 加载照片
-      console.log('[Download] 步骤1: 加载照片...')
-      const photo = await loadImage(cachedImage, '照片')
-      console.log('[Download] 照片加载完成, 尺寸:', photo.naturalWidth, 'x', photo.naturalHeight)
-
-      // 如果有边框，合成边框后下载
-      if (frameProxySrc) {
-        console.log('[Download] 步骤2: 有边框, 加载边框图片...')
-        const frame = await loadImage(frameProxySrc, '边框')
-        console.log('[Download] 边框加载完成, 尺寸:', frame.naturalWidth, 'x', frame.naturalHeight)
-
-        const canvas = document.createElement('canvas')
-        canvas.width = frame.naturalWidth || frame.width
-        canvas.height = frame.naturalHeight || frame.height
-        const ctx = canvas.getContext('2d')
-        console.log('[Download] 步骤3: Canvas创建, canvas尺寸:', canvas.width, 'x', canvas.height)
-
-        if (!ctx) {
-          throw new Error('无法创建Canvas 2D上下文')
-        }
-
-        // 绘制照片（cover模式）
-        const frameAspect = canvas.width / canvas.height
-        const photoAspect = (photo.naturalWidth || photo.width) / (photo.naturalHeight || photo.height)
-        let sx = 0, sy = 0, sw = photo.naturalWidth || photo.width, sh = photo.naturalHeight || photo.height
-        if (photoAspect > frameAspect) {
-          sw = sh * frameAspect
-          sx = ((photo.naturalWidth || photo.width) - sw) / 2
-        } else {
-          sh = sw / frameAspect
-          sy = ((photo.naturalHeight || photo.height) - sh) / 2
-        }
-        console.log('[Download] 步骤4: 绘制照片, 裁剪参数:', { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) })
-
-        // 直接绘制照片（不镜像，保存时文字正确）
-        ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
-        console.log('[Download] 照片绘制完成')
-
-        // 叠加边框
-        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
-        console.log('[Download] 边框叠加完成')
-
-        // 导出下载 - 使用 toDataURL 替代 toBlob，更可靠
-        console.log('[Download] 步骤5: 导出图片...')
-        try {
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-          console.log('[Download] toDataURL 成功, dataUrl长度:', dataUrl.length, '前50字符:', dataUrl.slice(0, 50))
-
-          const link = document.createElement('a')
-          link.href = dataUrl
-          link.download = `AI校园写真_${Date.now()}.jpg`
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          console.log('[Download] ========== 下载触发成功（有边框）==========')
-        } catch (canvasErr) {
-          console.error('[Download] canvas.toDataURL 失败:', canvasErr)
-          console.error('[Download] canvas tainted?', (() => { try { canvas.toDataURL(); return false } catch { return true } })())
-          throw new Error(`Canvas导出失败: ${canvasErr instanceof Error ? canvasErr.message : String(canvasErr)}`)
-        }
-        setIsDownloading(false)
-      } else {
-        console.log('[Download] 步骤2: 无边框, 直接下载原图')
-        const canvas = document.createElement('canvas')
-        canvas.width = photo.naturalWidth || photo.width
-        canvas.height = photo.naturalHeight || photo.height
-        const ctx = canvas.getContext('2d')
-        console.log('[Download] Canvas尺寸:', canvas.width, 'x', canvas.height)
-
-        if (!ctx) {
-          throw new Error('无法创建Canvas 2D上下文')
-        }
-
-        // 直接绘制照片（不镜像，保存时文字正确）
-        ctx.drawImage(photo, 0, 0)
-        console.log('[Download] 照片绘制完成')
-
-        try {
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-          console.log('[Download] toDataURL 成功, 长度:', dataUrl.length)
-
-          const link = document.createElement('a')
-          link.href = dataUrl
-          link.download = `AI校园写真_${Date.now()}.jpg`
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          console.log('[Download] ========== 下载触发成功（无边框）==========')
-        } catch (canvasErr) {
-          console.error('[Download] canvas.toDataURL 失败:', canvasErr)
-          throw new Error(`Canvas导出失败: ${canvasErr instanceof Error ? canvasErr.message : String(canvasErr)}`)
-        }
-        setIsDownloading(false)
-      }
+      const photo = await loadPhotoImage(cachedImage)
+      const frame = preloadedFrameRef.current
+      const blob = await compositeToBlob(photo, frame)
+      downloadBlob(blob, `AI校园写真_${Date.now()}.jpg`)
     } catch (err) {
-      console.error('[Download] ========== 下载流程异常 ==========')
-      console.error('[Download] 错误类型:', err?.constructor?.name)
-      console.error('[Download] 错误信息:', err instanceof Error ? err.message : String(err))
-      console.error('[Download] 完整错误:', err)
-      console.error('[Download] 当前状态 - selectedFrame:', selectedFrame, 'frameSrc:', frameSrc)
+      console.error('[Download] 失败:', err)
       alert('下载失败，请重试')
+    } finally {
       setIsDownloading(false)
     }
-  }, [cachedImage, frameSrc, selectedFrame])
+  }, [cachedImage, loadPhotoImage, compositeToBlob, downloadBlob])
 
   return (
     <div style={{ height: '100vh', display: 'flex', backgroundColor: '#fff' }}>
