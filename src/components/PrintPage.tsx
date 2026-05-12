@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { getFrameSrc, FRAMES } from '../data/frames'
+import { getFrameSrc, getFrameProxySrc, FRAMES } from '../data/frames'
 import { apiFetch } from '../apiBase'
 
 interface Props {
@@ -57,6 +57,7 @@ export default function PrintPage({
   // 确保始终有边框：使用 selectedFrame 或默认第一个边框
   const effectiveFrame = selectedFrame || FRAMES[0]?.id || null
   const frameSrc = effectiveFrame ? getFrameSrc(effectiveFrame) : null
+  const frameProxySrc = effectiveFrame ? getFrameProxySrc(effectiveFrame) : null
   console.log('[PrintPage] selectedFrame:', selectedFrame, 'effectiveFrame:', effectiveFrame, 'frameSrc:', frameSrc)
 
   useEffect(() => {
@@ -105,8 +106,8 @@ export default function PrintPage({
 
       // 限制Canvas最大分辨率（6寸照片 1200x1800 足够）
       const MAX_SIZE = 1200
-      if (frameSrc) {
-        const frame = await loadImage(frameSrc)
+      if (frameProxySrc) {
+        const frame = await loadImage(frameProxySrc)
         const fw = frame.naturalWidth || frame.width
         const fh = frame.naturalHeight || frame.height
         const scale = Math.min(1, MAX_SIZE / Math.max(fw, fh))
@@ -240,9 +241,9 @@ export default function PrintPage({
       console.log('[Download] 照片加载完成, 尺寸:', photo.naturalWidth, 'x', photo.naturalHeight)
 
       // 如果有边框，合成边框后下载
-      if (frameSrc) {
+      if (frameProxySrc) {
         console.log('[Download] 步骤2: 有边框, 加载边框图片...')
-        const frame = await loadImage(frameSrc, '边框')
+        const frame = await loadImage(frameProxySrc, '边框')
         console.log('[Download] 边框加载完成, 尺寸:', frame.naturalWidth, 'x', frame.naturalHeight)
 
         const canvas = document.createElement('canvas')
