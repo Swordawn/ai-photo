@@ -1289,9 +1289,7 @@ var fa=cw/ch;
 var pa=pw/ph;
 var sx=0,sy=0,sw=pw,sh=ph;
 if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
-ctx.save();ctx.translate(cw,0);ctx.scale(-1,1);
 ctx.drawImage(photo,sx,sy,sw,sh,0,0,cw,ch);
-ctx.restore();
 ctx.drawImage(frame,0,0,cw,ch);
 var dataUrl=c.toDataURL('image/jpeg',0.92);
 c.width=0;c.height=0;

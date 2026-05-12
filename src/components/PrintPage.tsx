@@ -121,12 +121,8 @@ export default function PrintPage({
         if (photoAspect > frameAspect) { sw = sh * frameAspect; sx = ((photo.naturalWidth || photo.width) - sw) / 2 }
         else { sh = sw / frameAspect; sy = ((photo.naturalHeight || photo.height) - sh) / 2 }
 
-        // 镜像照片（与页面显示 scaleX(-1) 一致）
-        ctx.save()
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
+        // 直接绘制照片（不镜像，保存时文字正确）
         ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
-        ctx.restore()
         ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
         printDataUrl = canvas.toDataURL('image/jpeg', 0.9)
       } else {
@@ -272,13 +268,9 @@ export default function PrintPage({
         }
         console.log('[Download] 步骤4: 绘制照片, 裁剪参数:', { sx: Math.round(sx), sy: Math.round(sy), sw: Math.round(sw), sh: Math.round(sh) })
 
-        // 镜像照片（与页面显示 scaleX(-1) 一致）
-        ctx.save()
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
+        // 直接绘制照片（不镜像，保存时文字正确）
         ctx.drawImage(photo, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
-        ctx.restore()
-        console.log('[Download] 照片绘制完成（已镜像）')
+        console.log('[Download] 照片绘制完成')
 
         // 叠加边框
         ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
@@ -315,13 +307,9 @@ export default function PrintPage({
           throw new Error('无法创建Canvas 2D上下文')
         }
 
-        // 镜像照片（与页面显示 scaleX(-1) 一致）
-        ctx.save()
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
+        // 直接绘制照片（不镜像，保存时文字正确）
         ctx.drawImage(photo, 0, 0)
-        ctx.restore()
-        console.log('[Download] 照片绘制完成（已镜像）')
+        console.log('[Download] 照片绘制完成')
 
         try {
           const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
