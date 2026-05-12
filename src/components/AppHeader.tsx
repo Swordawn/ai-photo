@@ -1,4 +1,4 @@
-const collegeLogo = new URL('../assets/college-logo.png', import.meta.url).href
+const collegeLogo = 'https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com/assets/college-logo.png'
 
 export default function AppHeader() {
   return (
