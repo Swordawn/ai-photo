@@ -511,7 +511,7 @@ app.post('/api/register', (req, res) => {
   if (cleanPhone && !/^1[3-9]\d{9}$/.test(cleanPhone)) {
     return res.status(400).json({ error: '请输入正确的11位手机号' })
   }
-  const stmt = db.prepare('INSERT INTO registrations (name, class_name, phone) VALUES (?, ?, ?)')
+  const stmt = db.prepare("INSERT INTO registrations (name, class_name, phone, created_at) VALUES (?, ?, ?, datetime('now', '+8 hours'))")
   const result = stmt.run(cleanName, cleanClass, cleanPhone)
   res.json({ success: true, id: result.lastInsertRowid })
 })
