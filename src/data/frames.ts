@@ -1,6 +1,5 @@
-// 边框图片走腾讯云COS，不走服务器带宽
-const COS_BASE = 'https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com'
-const FRAME_BASE = `${COS_BASE}/frames`
+// 相框走本地路径（避免CORS问题，Canvas合成需要同源）
+const FRAME_BASE = '/frames'
 
 export interface Frame {
   id: string
