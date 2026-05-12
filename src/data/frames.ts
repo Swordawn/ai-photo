@@ -1,9 +1,5 @@
-// 显示用：COS CDN（快）
 const COS_BASE = 'https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com'
 const FRAME_COS = `${COS_BASE}/frames`
-
-// Canvas合成用：本地路径（同源无CORS，不走服务器带宽也没关系因为是自助机本地请求）
-const FRAME_LOCAL = '/frames'
 
 export interface Frame {
   id: string
@@ -21,10 +17,4 @@ export const FRAMES: Frame[] = [
 
 export function getFrameSrc(frameId: string): string {
   return FRAMES.find(f => f.id === frameId)?.src ?? FRAMES[0].src
-}
-
-// Canvas合成用：本地路径（同源，无CORS，秒加载）
-export function getFrameProxySrc(frameId: string): string {
-  const id = FRAMES.find(f => f.id === frameId)?.id ?? FRAMES[0].id
-  return `${FRAME_LOCAL}/${id.replace('frame', 'xiangkuang')}.png`
 }

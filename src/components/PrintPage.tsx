@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { getFrameSrc, getFrameProxySrc, FRAMES } from '../data/frames'
+import { getFrameSrc, FRAMES } from '../data/frames'
 import { apiFetch } from '../apiBase'
 
 interface Props {
@@ -57,7 +57,6 @@ export default function PrintPage({
   // 确保始终有边框：使用 selectedFrame 或默认第一个边框
   const effectiveFrame = useMemo(() => selectedFrame || FRAMES[0]?.id || null, [selectedFrame])
   const frameSrc = useMemo(() => effectiveFrame ? getFrameSrc(effectiveFrame) : null, [effectiveFrame])
-  const frameProxySrc = useMemo(() => effectiveFrame ? getFrameProxySrc(effectiveFrame) : null, [effectiveFrame])
 
   useEffect(() => {
     console.log('[PrintPage] selectedFrame:', selectedFrame, 'effectiveFrame:', effectiveFrame, 'frameSrc:', frameSrc)
@@ -69,17 +68,29 @@ export default function PrintPage({
     return () => clearTimeout(timer)
   }, [countdown])
 
-  // 页面加载时预加载相框图片（点击下载/打印时直接用，不再等待加载）
+  // 页面加载时通过代理预加载COS相框（blob URL，Canvas可用，不走服务器带宽）
   const preloadedFrameRef = useRef<HTMLImageElement | null>(null)
+  const frameBlobUrlRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!frameProxySrc) { preloadedFrameRef.current = null; return }
+    if (!frameSrc) { preloadedFrameRef.current = null; return }
     let cancelled = false
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => { if (!cancelled) preloadedFrameRef.current = img }
-    img.src = frameProxySrc
-    return () => { cancelled = true }
-  }, [frameProxySrc])
+    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(frameSrc)}`
+    apiFetch(proxyUrl)
+      .then(r => r.blob())
+      .then(blob => {
+        if (cancelled) return
+        const blobUrl = URL.createObjectURL(blob)
+        frameBlobUrlRef.current = blobUrl
+        const img = new Image()
+        img.onload = () => { if (!cancelled) preloadedFrameRef.current = img }
+        img.src = blobUrl
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      if (frameBlobUrlRef.current) { URL.revokeObjectURL(frameBlobUrlRef.current); frameBlobUrlRef.current = null }
+    }
+  }, [frameSrc])
 
   // 通用：加载照片Image对象
   const loadPhotoImage = useCallback(async (src: string): Promise<HTMLImageElement> => {
