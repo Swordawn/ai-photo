@@ -117,6 +117,8 @@ export default function HomePage({ onStart: _, onCamera, registration, onClearRe
             src={img}
             alt=""
             loading={index === 0 ? 'eager' : 'lazy'}
+            fetchPriority={index === 0 ? 'high' : 'low'}
+            decoding="async"
             style={{
               position: 'absolute',
               top: 0, left: 0,
