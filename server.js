@@ -143,7 +143,7 @@ const uploadsDir = join(__dirname, 'uploads')
 if (!existsSync(uploadsDir)) {
   await mkdir(uploadsDir, { recursive: true })
 }
-app.use('/uploads', express.static(uploadsDir))
+app.use('/uploads', express.static(uploadsDir, { maxAge: '1h' }))
 
 // 服务 public 目录的静态文件（边框图片等）
 const publicDir = join(__dirname, 'public')
@@ -152,7 +152,7 @@ app.use(express.static(publicDir, { extensions: ['html'], maxAge: '1h' }))
 // 生产环境：服务前端构建文件
 const distDir = join(__dirname, 'dist')
 if (existsSync(distDir)) {
-  app.use(express.static(distDir))
+  app.use(express.static(distDir, { maxAge: '7d' }))
 }
 
 // SQLite 数据库
@@ -607,16 +607,17 @@ app.get('/api/p/:id', (req, res) => {
   }
 })
 
-// 直接serve照片文件（同源，无CORS问题，下载页用，带内存+磁盘双重缓存）
-// 并发请求去重：同一个photoId只fetch一次
-const inflightFetches = new Map()
-
+// 直接serve照片文件（同源，无CORS问题，下载页用，带内存缓存）
 app.get('/dl/:id', async (req, res) => {
   try {
     const photoId = req.params.id
-    // 1. 检查内存缓存
     const cached = photoCache.get(photoId)
     if (cached && Date.now() - cached.cachedAt < PHOTO_CACHE_TTL) {
+      if (cached.redirect) {
+        res.set('Cache-Control', 'public, max-age=3600')
+        res.set('X-Cache', 'HIT-REDIRECT')
+        return res.redirect(302, cached.redirect)
+      }
       res.set('Content-Type', cached.contentType)
       res.set('Cache-Control', 'public, max-age=3600')
       res.set('X-Cache', 'HIT')
@@ -627,7 +628,7 @@ app.get('/dl/:id', async (req, res) => {
     if (!photo) return res.status(404).json({ error: '照片不存在' })
     const filename = photo.filename
 
-    // 2. 本地文件直接serve
+    // 本地文件直接serve
     if (filename.startsWith('/uploads/')) {
       const filepath = join(__dirname, filename)
       const resolved = resolve(filepath)
@@ -638,15 +639,14 @@ app.get('/dl/:id', async (req, res) => {
       return res.sendFile(resolved)
     }
 
-    // 3. 远程URL → 302重定向到COS（客户端直接从CDN加载，不经过服务器）
+    // 远程URL → 302重定向到COS（客户端直接从CDN加载）
     if (filename.startsWith('http')) {
-      console.log(`[dl] redirect to COS: ${filename.slice(0, 80)}`)
+      photoCache.set(photoId, { redirect: filename, cachedAt: Date.now() })
       res.set('Cache-Control', 'public, max-age=3600')
       res.set('X-Cache', 'REDIRECT')
       return res.redirect(302, filename)
     }
 
-    // 其他URL重定向
     res.redirect(filename)
   } catch (err) {
     console.error('serve照片失败:', err.message)
@@ -705,11 +705,11 @@ app.post('/api/save-photos', async (req, res) => {
     console.log(`[保存] 原版: ${originalFilename} (${originalBuffer.length} bytes) COS:${!!originalCosUrl}`)
     console.log(`[保存] AI版: ${aiFilename} (${aiBuffer.length} bytes) COS:${!!aiCosUrl}`)
 
-    // 事务写入数据库（优先本地路径，COS URL作备份）
+    // 事务写入数据库（优先COS URL，本地路径作备份）
     const localOriginal = `/uploads/已完成照片/${originalFilename}`
     const localAi = `/uploads/已完成照片/${aiFilename}`
-    const originalPath = localOriginal
-    const aiPath = localAi
+    const originalPath = originalCosUrl || localOriginal
+    const aiPath = aiCosUrl || localAi
     let aiPhotoId = null
     const insertPhotos = db.transaction(() => {
       db.prepare("INSERT INTO photos (filename, style, reg_id, type, created_at) VALUES (?, ?, ?, 'original', datetime('now', '+8 hours'))").run(originalPath, style || '', regId || null)
@@ -1250,12 +1250,6 @@ var frameSrc=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 log('page loaded, photoId='+photoId+', photoUrl='+(photoUrl?photoUrl.slice(0,60):'null')+', frame='+frameId);
 
-function isCrossOrigin(url){
-if(!url)return false;
-if(url.startsWith('data:')||url.startsWith('blob:')||url.startsWith('/'))return false;
-try{return new URL(url,window.location.origin).origin!==window.location.origin}catch{return false}
-}
-
 function loadImg(src,timeout,label){
 return new Promise(function(resolve,reject){
 var t=Date.now();
@@ -1269,14 +1263,10 @@ img.src=src;
 });
 }
 
-function proxyIfNeeded(url){
-if(!url||!isCrossOrigin(url)){log('no proxy needed for: '+String(url).slice(0,60));return url}
-log('using proxy for: '+url.slice(0,60));
-return '/api/proxy-image?url='+encodeURIComponent(url);
-}
-
-function composite(photo,frame,cw,ch){
+function composite(photo,frame,cw,ch,callback){
 var t=Date.now();
+var MAX=1600;
+if(cw>MAX||ch>MAX){var r=Math.min(MAX/cw,MAX/ch);cw=Math.round(cw*r);ch=Math.round(ch*r)}
 log('composite start, canvas='+cw+'x'+ch);
 var c=document.createElement('canvas');
 c.width=cw;c.height=ch;
@@ -1289,10 +1279,12 @@ var sx=0,sy=0,sw=pw,sh=ph;
 if(pa>fa){sw=sh*fa;sx=(pw-sw)/2}else{sh=sw/fa;sy=(ph-sh)/2}
 ctx.drawImage(photo,sx,sy,sw,sh,0,0,cw,ch);
 ctx.drawImage(frame,0,0,cw,ch);
-var dataUrl=c.toDataURL('image/jpeg',0.92);
+c.toBlob(function(blob){
 c.width=0;c.height=0;
-log('composite done in '+(Date.now()-t)+'ms, dataUrl length='+dataUrl.length);
-return dataUrl;
+var url=URL.createObjectURL(blob);
+log('composite done in '+(Date.now()-t)+'ms, blob size='+blob.size);
+callback(url);
+},'image/jpeg',0.92);
 }
 
 function showError(msg,retryFn){
@@ -1317,10 +1309,10 @@ var fw=frame.naturalWidth||1016;
 var fh=frame.naturalHeight||1524;
 if(fw<500)fw=1016;
 if(fh<500)fh=1524;
-var dataUrl=composite(photo,frame,fw,fh);
+composite(photo,frame,fw,fh,function(blobUrl){
 log('setting img src...');
 var result=document.getElementById('result');
-result.src=dataUrl;
+result.src=blobUrl;
 document.getElementById('loading').style.display='none';
 document.getElementById('content').style.display='block';
 log('DONE, total='+Math.round(Date.now()-T0)+'ms');
@@ -1330,6 +1322,7 @@ document.getElementById('downloadBtn').style.background='#999';
 document.getElementById('downloadBtn').disabled=true;
 document.getElementById('saveTip').textContent='iOS设备请长按图片保存';
 }
+})
 }catch(e){
 console.error(e);
 log('ERROR: '+(e.message||e)+' total='+Math.round(Date.now()-T0)+'ms');
