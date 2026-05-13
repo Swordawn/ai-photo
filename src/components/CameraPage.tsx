@@ -63,11 +63,28 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
   const currentFrameSrc = selectedFrame ? getFrameSrc(selectedFrame) : null
 
   const handleCapture = useCallback(() => {
-    const imageSrc = webcamRef.current?.getScreenshot()
-    if (imageSrc) {
+    const webcam = webcamRef.current
+    if (!webcam) return
+    // 直接从video元素截取原始分辨率，绕过react-webcam的canvas压缩
+    const video = webcam.video
+    if (video && video.videoWidth > 0) {
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(video, 0, 0)
+      const imageSrc = canvas.toDataURL('image/jpeg', 0.95)
       setFlash(true)
       setCaptured(imageSrc)
       setTimeout(() => setFlash(false), 600)
+    } else {
+      // fallback
+      const imageSrc = webcam.getScreenshot()
+      if (imageSrc) {
+        setFlash(true)
+        setCaptured(imageSrc)
+        setTimeout(() => setFlash(false), 600)
+      }
     }
   }, [])
 
@@ -173,8 +190,8 @@ export default function CameraPage({ onCapture, onBack, selectedFrame, onSelectF
               screenshotFormat="image/jpeg"
               screenshotQuality={0.9}
               videoConstraints={selectedDeviceId
-                ? { width: 1920, height: 1080, deviceId: selectedDeviceId }
-                : { width: 1920, height: 1080, facingMode }
+                ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 }, deviceId: selectedDeviceId }
+                : { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 }, facingMode }
               }
               onUserMedia={() => { setIsCameraReady(true); setCameraError(null) }}
               onUserMediaError={(err) => {
