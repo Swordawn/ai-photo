@@ -590,6 +590,9 @@ app.get('/api/p/:id', (req, res) => {
 })
 
 // 直接serve照片文件（同源，无CORS问题，下载页用，带内存+磁盘双重缓存）
+// 并发请求去重：同一个photoId只fetch一次
+const inflightFetches = new Map()
+
 app.get('/dl/:id', async (req, res) => {
   try {
     const photoId = req.params.id
@@ -619,35 +622,62 @@ app.get('/dl/:id', async (req, res) => {
 
     // 3. 远程URL → fetch并缓存到本地+内存
     if (filename.startsWith('http')) {
-      console.log(`[dl] fetching from remote: ${filename.slice(0, 80)}`)
-      const resp = await fetch(filename, { signal: AbortSignal.timeout(30000) })
-      if (!resp.ok) return res.status(502).json({ error: '远程图片获取失败' })
-      const buffer = Buffer.from(await resp.arrayBuffer())
-      const contentType = resp.headers.get('content-type') || 'image/jpeg'
+      let buffer, contentType
 
-      // 保存到本地磁盘
-      const finishedDir = join(uploadsDir, '已完成照片')
-      await mkdir(finishedDir, { recursive: true })
-      const localFilename = `cached_${photoId}_${Date.now()}.jpg`
-      const localFilepath = join(finishedDir, localFilename)
-      await writeFile(localFilepath, buffer)
-      const localDbPath = `/uploads/已完成照片/${localFilename}`
-      // 更新DB，下次直接读本地
-      db.prepare('UPDATE photos SET filename = ? WHERE id = ?').run(localDbPath, photoId)
-      console.log(`[dl] saved to local: ${localDbPath}, ${buffer.length} bytes`)
+      // 并发去重：如果已有相同photoId的请求在进行中，等待它的结果
+      if (inflightFetches.has(photoId)) {
+        const result = await inflightFetches.get(photoId)
+        buffer = result.buffer
+        contentType = result.contentType
+      } else {
+        const fetchPromise = (async () => {
+          console.log(`[dl] fetching from remote: ${filename.slice(0, 80)}`)
+          const resp = await fetch(filename, { signal: AbortSignal.timeout(30000) })
+          if (!resp.ok) throw new Error(`远程图片获取失败: ${resp.status}`)
+          const buf = Buffer.from(await resp.arrayBuffer())
+          const ct = resp.headers.get('content-type') || 'image/jpeg'
+          return { buffer: buf, contentType: ct }
+        })()
+        inflightFetches.set(photoId, fetchPromise)
+        try {
+          const result = await fetchPromise
+          buffer = result.buffer
+          contentType = result.contentType
+        } finally {
+          inflightFetches.delete(photoId)
+        }
+      }
 
-      // 存入内存缓存
+      // 存入内存缓存（必须在res.send之前）
       photoCache.set(photoId, { buffer, contentType, cachedAt: Date.now() })
+
+      // 先返回响应给客户端
       res.set('Content-Type', contentType)
       res.set('Cache-Control', 'public, max-age=3600')
       res.set('X-Cache', 'MISS')
-      return res.send(buffer)
+      res.send(buffer)
+
+      // 后台保存到磁盘+更新DB（非阻塞，失败不影响响应）
+      const finishedDir = join(uploadsDir, '已完成照片')
+      mkdir(finishedDir, { recursive: true }).then(async () => {
+        try {
+          const localFilename = `cached_${photoId}_${Date.now()}.jpg`
+          const localFilepath = join(finishedDir, localFilename)
+          await writeFile(localFilepath, buffer)
+          const localDbPath = `/uploads/已完成照片/${localFilename}`
+          db.prepare('UPDATE photos SET filename = ? WHERE id = ?').run(localDbPath, photoId)
+          console.log(`[dl] saved to local: ${localDbPath}, ${buffer.length} bytes`)
+        } catch (diskErr) {
+          console.error('[dl] disk cache failed (non-fatal):', diskErr.message)
+        }
+      }).catch(() => {})
+      return
     }
 
     // 其他URL重定向
     res.redirect(filename)
   } catch (err) {
-    console.error('serve照片失败:', err)
+    console.error('serve照片失败:', err.message)
     res.status(500).json({ error: '加载失败' })
   }
 })
