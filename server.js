@@ -129,7 +129,7 @@ app.use('/uploads', express.static(uploadsDir))
 
 // 服务 public 目录的静态文件（边框图片等）
 const publicDir = join(__dirname, 'public')
-app.use(express.static(publicDir))
+app.use(express.static(publicDir, { extensions: ['html'], maxAge: '1h' }))
 
 // 生产环境：服务前端构建文件
 const distDir = join(__dirname, 'dist')
@@ -765,11 +765,6 @@ app.post('/api/save-photos', async (req, res) => {
 app.delete('/api/admin/registrations', authMiddleware, (req, res) => {
   db.exec('DELETE FROM registrations')
   res.json({ success: true })
-})
-
-// 登记页面（手机端访问）
-app.get('/register', (req, res) => {
-  res.send(getRegisterHTML())
 })
 
 // ===== 管理页面 =====
