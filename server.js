@@ -1248,7 +1248,8 @@ var photoUrl=params.get('url');
 var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
-var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
+var COS_BASE='https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com';
+var frameSrc=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 log('page loaded, photoId='+photoId+', photoUrl='+(photoUrl?photoUrl.slice(0,60):'null')+', frame='+frameId);
 
@@ -1306,13 +1307,14 @@ html+='<button onclick="window._retryFn()" style="padding:8px 20px;background:#1
 document.getElementById('loading').innerHTML=html;
 }
 
-async function init(url){
+async function init(url,retryCount){
 if(!url){showError('请通过扫描二维码访问此页面');return}
+retryCount=retryCount||0;
 try{
-log('init start, url='+url.slice(0,80));
+log('init start, url='+url.slice(0,80)+', retry='+retryCount);
 var loadUrl=proxyIfNeeded(url);
 log('loading photo+frame in parallel...');
-var results=await Promise.all([loadImg(loadUrl,20000,'photo'),loadImg(frameSrc,5000,'frame')]);
+var results=await Promise.all([loadImg(loadUrl,30000,'photo'),loadImg(frameSrc,15000,'frame')]);
 var photo=results[0],frame=results[1];
 log('both images loaded, photo='+photo.naturalWidth+'x'+photo.naturalHeight+', frame='+frame.naturalWidth+'x'+frame.naturalHeight);
 var fw=frame.naturalWidth||1016;
@@ -1335,7 +1337,15 @@ document.getElementById('saveTip').textContent='iOS设备请长按图片保存';
 }catch(e){
 console.error(e);
 log('ERROR: '+(e.message||e)+' total='+Math.round(Date.now()-T0)+'ms');
-showError(e.message||'图片合成失败',function(){init(url)});
+// 自动重试最多3次（CF隧道冷启动/网络抖动）
+if(retryCount<3){
+var delay=(retryCount+1)*2000;
+log('auto-retry '+(retryCount+1)+'/3 in '+delay+'ms...');
+document.getElementById('loading').innerHTML='<div class="spinner"></div><p style="color:#666;font-size:14px">加载中，自动重试('+(retryCount+1)+'/3)...</p>';
+setTimeout(function(){init(url,retryCount+1)},delay);
+}else{
+showError(e.message||'图片合成失败',function(){init(url,0)});
+}
 }
 }
 
