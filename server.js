@@ -21,6 +21,24 @@ const cos = new COS({
 const COS_BUCKET = process.env.COS_BUCKET
 const COS_REGION = process.env.COS_REGION
 const COS_ENABLED = !!(COS_BUCKET && COS_REGION)
+const COS_BASE = COS_ENABLED ? `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com` : ''
+
+// 启动时配置 CORS（允许浏览器直接访问 COS 图片）
+if (COS_ENABLED) {
+  cos.putBucketCors({
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    CORSRules: [{
+      AllowedOrigins: ['*'],
+      AllowedMethods: ['GET', 'HEAD'],
+      AllowedHeaders: ['*'],
+      MaxAgeSeconds: 86400,
+    }],
+  }, (err) => {
+    if (err) console.warn('[COS] CORS 配置失败（可能需要 PutBucketCORS 权限）:', err.message)
+    else console.log('[COS] CORS 已配置')
+  })
+}
 
 // 上传文件到 COS
 async function uploadToCOS(key, buffer, contentType = 'image/jpeg') {
@@ -620,58 +638,12 @@ app.get('/dl/:id', async (req, res) => {
       return res.sendFile(resolved)
     }
 
-    // 3. 远程URL → fetch并缓存到本地+内存
+    // 3. 远程URL → 302重定向到COS（客户端直接从CDN加载，不经过服务器）
     if (filename.startsWith('http')) {
-      let buffer, contentType
-
-      // 并发去重：如果已有相同photoId的请求在进行中，等待它的结果
-      if (inflightFetches.has(photoId)) {
-        const result = await inflightFetches.get(photoId)
-        buffer = result.buffer
-        contentType = result.contentType
-      } else {
-        const fetchPromise = (async () => {
-          console.log(`[dl] fetching from remote: ${filename.slice(0, 80)}`)
-          const resp = await fetch(filename, { signal: AbortSignal.timeout(30000) })
-          if (!resp.ok) throw new Error(`远程图片获取失败: ${resp.status}`)
-          const buf = Buffer.from(await resp.arrayBuffer())
-          const ct = resp.headers.get('content-type') || 'image/jpeg'
-          return { buffer: buf, contentType: ct }
-        })()
-        inflightFetches.set(photoId, fetchPromise)
-        try {
-          const result = await fetchPromise
-          buffer = result.buffer
-          contentType = result.contentType
-        } finally {
-          inflightFetches.delete(photoId)
-        }
-      }
-
-      // 存入内存缓存（必须在res.send之前）
-      photoCache.set(photoId, { buffer, contentType, cachedAt: Date.now() })
-
-      // 先返回响应给客户端
-      res.set('Content-Type', contentType)
+      console.log(`[dl] redirect to COS: ${filename.slice(0, 80)}`)
       res.set('Cache-Control', 'public, max-age=3600')
-      res.set('X-Cache', 'MISS')
-      res.send(buffer)
-
-      // 后台保存到磁盘+更新DB（非阻塞，失败不影响响应）
-      const finishedDir = join(uploadsDir, '已完成照片')
-      mkdir(finishedDir, { recursive: true }).then(async () => {
-        try {
-          const localFilename = `cached_${photoId}_${Date.now()}.jpg`
-          const localFilepath = join(finishedDir, localFilename)
-          await writeFile(localFilepath, buffer)
-          const localDbPath = `/uploads/已完成照片/${localFilename}`
-          db.prepare('UPDATE photos SET filename = ? WHERE id = ?').run(localDbPath, photoId)
-          console.log(`[dl] saved to local: ${localDbPath}, ${buffer.length} bytes`)
-        } catch (diskErr) {
-          console.error('[dl] disk cache failed (non-fatal):', diskErr.message)
-        }
-      }).catch(() => {})
-      return
+      res.set('X-Cache', 'REDIRECT')
+      return res.redirect(302, filename)
     }
 
     // 其他URL重定向
@@ -1290,7 +1262,7 @@ var t=Date.now();
 log('loadImg['+label+'] start: '+src.slice(0,80));
 var timer=setTimeout(function(){log('loadImg['+label+'] TIMEOUT after '+(Date.now()-t)+'ms');reject(new Error('图片加载超时'))},timeout||15000);
 var img=new Image();
-if(isCrossOrigin(src))img.crossOrigin='anonymous';
+img.crossOrigin='anonymous';
 img.onload=function(){clearTimeout(timer);log('loadImg['+label+'] ok in '+(Date.now()-t)+'ms, size='+img.naturalWidth+'x'+img.naturalHeight);resolve(img)};
 img.onerror=function(){clearTimeout(timer);log('loadImg['+label+'] ERROR after '+(Date.now()-t)+'ms');reject(new Error('图片加载失败'))};
 img.src=src;
@@ -1337,9 +1309,8 @@ if(!url){showError('请通过扫描二维码访问此页面');return}
 retryCount=retryCount||0;
 try{
 log('init start, url='+url.slice(0,80)+', retry='+retryCount);
-var loadUrl=proxyIfNeeded(url);
-log('loading photo+frame in parallel...');
-var results=await Promise.all([loadImg(loadUrl,30000,'photo'),loadImg(frameSrc,15000,'frame')]);
+log('loading photo+frame in parallel (direct from CDN)...');
+var results=await Promise.all([loadImg(url,30000,'photo'),loadImg(frameSrc,15000,'frame')]);
 var photo=results[0],frame=results[1];
 log('both images loaded, photo='+photo.naturalWidth+'x'+photo.naturalHeight+', frame='+frame.naturalWidth+'x'+frame.naturalHeight);
 var fw=frame.naturalWidth||1016;
