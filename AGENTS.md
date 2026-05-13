@@ -41,6 +41,12 @@
 5. 90秒超时自动清除（不标记已使用，允许重新扫码）
 6. 跳过按钮不标记已使用，允许重新扫码
 
+### 拍照
+- **react-webcam** 组件，`videoConstraints: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }`
+- **直接从 video 元素截取**：`video.videoWidth × video.videoHeight`，绕过 react-webcam 的 canvas 压缩
+- **JPEG 质量 0.95**，原始分辨率输出
+- 支持多摄像头切换（自动选择外接摄像头）
+
 ### AI 合成
 1. 拍照 → base64 JPEG（原始数据，不镜像）
 2. 选择风格 + 相框
@@ -63,18 +69,26 @@
 
 ### 扫码下载（/download 页面）
 - QR码指向 `/download?p=照片ID&frame=相框ID`
-- **`/dl/:id` 端点**：优先读本地文件（毫秒级），远程URL自动fetch+保存本地+更新DB
-- **内存缓存**：远程fetch的照片缓存到内存Map（1小时TTL），后续请求直接返回
-- **Canvas预合成**：页面加载时合成镜像+相框，预览=保存=同一张图
-- **iOS检测**：iOS设备提示"长按图片保存"（Safari不支持`<a download>`）
-- **超时+重试**：图片加载20s超时，失败显示重试按钮
+- **`/dl/:id` 端点**：
+  - 本地文件直接 serve（毫秒级）
+  - 远程 COS URL → fetch → **先返回响应** → 后台异步保存本地+更新DB
+  - **并发去重**：同一 photoId 多个请求只 fetch 一次 COS
+  - **内存缓存**：1小时 TTL，后续请求直接返回
+  - **磁盘缓存非阻塞**：writeFile 失败不影响响应，只打日志
+- **相框走 COS CDN**：`/api/proxy-image?url=COS帧URL`，不走本地服务器
+- **自动重试**：加载失败自动重试 3 次（间隔 2s/4s/6s），解决 CF 隧道冷启动问题
+- **Canvas 预合成**：页面加载时合成镜像+相框，预览=保存=同一张图
+- **iOS 检测**：iOS 设备提示"长按图片保存"
+
+### 打印（PrintPage）
+- **相框预加载**：页面加载时通过 proxy 预加载 COS 相框为 blob URL，点击打印直接用
+- **toBlob 异步编码**：不阻塞主线程
+- **@page 4in×6in 纵向**：精确匹配 6 寸照片，无空白第二页
+- **打印弹窗样式**：html/body 打印时精确 4×6 英寸 + overflow:hidden
 
 ### 镜像处理（方案B：预览镜像+保存不镜像）
 - **预览（CSS镜像）**：摄像头/合成页/结果页 → CSS `scaleX(-1)` → 脸自然
 - **保存（不镜像）**：下载/打印/QR码 → Canvas直接绘制 → 文字正确
-- 自助机下载：Canvas合成不镜像
-- 自助机打印：Canvas合成不镜像
-- 扫码下载（/download）：Canvas合成不镜像
 
 ---
 
@@ -83,32 +97,42 @@
 ```
 用户浏览器
   ├── 页面 → swordawn.cloud（CF 隧道 → 服务器 3001）
-  ├── 相框显示 → COS CDN（快）
-  ├── 相框合成 → /frames/*（服务器本地，同源无CORS）
-  ├── 照片 → /dl/:id（服务器本地文件，毫秒级）
+  ├── 相框 → COS CDN（显示+合成都走COS）
+  ├── 背景图 → COS CDN
+  ├── 校园Logo → COS CDN
+  ├── 照片 → /dl/:id（本地缓存/远程COS fetch）
   └── API → swordawn.cloud/api/*（CF 隧道 → 服务器）
 ```
 
 **服务器：** 81.70.134.240 (Ubuntu, 2核2G4M, 4Mbps)
 **隧道：** Cloudflare Named Tunnel `swordawn.cloud`
-**进程管理：** PM2（开机自启，`pm2 reload` 平滑重载）
+**进程管理：** PM2（ubuntu 用户，开机自启，`pm2 reload` 平滑重载）
 **COS：** 腾讯云对象存储（南京区域，图片资源CDN）
+
+### 资源全部走 COS（除域名隧道）
+
+| 资源 | 来源 |
+|------|------|
+| 相框图片 | COS CDN（显示+Canvas合成都走COS，通过proxy解决CORS） |
+| 背景轮播图 | COS CDN |
+| 校园Logo | COS CDN |
+| 照片存储 | COS + 本地缓存 |
 
 ---
 
 ## 相框系统
 
-**5款相框**，双路径加载：
+**5款相框**，全部走 COS CDN：
 
 | 用途 | 路径 | 说明 |
 |------|------|------|
-| CSS显示 | COS CDN `frames.ts` FRAME_COS | 快，走CDN |
-| Canvas合成 | `/frames/xiangkuang*.png` 本地 | 同源无CORS，秒加载 |
+| CSS显示 | `COS_BASE/frames/xiangkuang*.png` | COS CDN |
+| Canvas合成 | 通过 `/api/proxy-image` 加载 COS URL → blob URL | 同源无CORS |
 
 - `xiangkuang1.png` ~ `xiangkuang5.png`
 - 默认选中：frame1
-- 服务器本地：`/opt/ai-photo/public/frames/`（构建后复制到 `dist/frames/`）
-- COS：`cos.ap-nanjing.myqcloud.com/frames/`
+- COS：`https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com/frames/`
+- PrintPage 预加载相框到内存（blob URL），点击打印/下载直接用
 
 ---
 
@@ -171,7 +195,7 @@ COS_REGION=ap-nanjing              # COS 区域
 | POST | `/api/save-photo-record` | 记录照片到数据库（COS直传后） |
 | POST | `/api/cos-sign` | 生成COS预签名URL（前端直传） |
 | GET | `/api/proxy-image?url=` | 代理远程图片（白名单） |
-| GET | `/dl/:id` | serve照片（本地/远程fetch+缓存+更新DB） |
+| GET | `/dl/:id` | serve照片（本地缓存/远程fetch+内存缓存+并发去重） |
 | POST | `/api/report-page` | 前端上报当前页面 |
 | GET | `/api/machine-status` | 前端读取机器状态 |
 
@@ -234,7 +258,7 @@ CREATE TABLE registrations (
 ```sql
 CREATE TABLE photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  filename TEXT NOT NULL,  -- 本地路径 /uploads/已完成照片/xxx.jpg
+  filename TEXT NOT NULL,  -- 本地路径 /uploads/已完成照片/xxx.jpg 或 COS URL
   style TEXT,
   frame TEXT,
   reg_id INTEGER,
@@ -271,14 +295,25 @@ CREATE TABLE styles (
 
 ## 性能优化
 
-- **相框双路径**：显示走COS CDN，Canvas合成走本地`/frames/`
-- **照片本地serve**：`/dl/:id` 直接读本地文件（毫秒级）
-- **内存缓存**：远程照片fetch后缓存到Map（1小时TTL）
-- **自动缓存**：远程URL首次fetch后保存本地+更新DB
-- **AI+COS并行**：不互相依赖，同时执行
-- **Canvas预合成**：下载页加载时一次性合成，预览=保存
-- **ComposePage卸载abort**：离开页面自动取消AI请求
-- **PrintPage自动reset**：90秒倒计时结束后清理全部状态
+### 前端
+- **PrintPage useMemo**：`frameSrc`/`effectiveFrame`/`frameProxySrc` 全部 memoize，避免 countdown 每秒触发重渲染
+- **PrintPage 相框预加载**：页面加载时通过 proxy 预加载 COS 相框为 blob URL
+- **PrintPage toBlob**：异步编码，不阻塞主线程
+- **PrintPage @page 4×6**：精确匹配 6 寸照片，无空白第二页
+- **Google Fonts 非阻塞**：`media="print" onload="this.media='all'"` 异步加载
+- **去掉未用字体**：Inter、JetBrains Mono 从未使用，已删除
+- **首页图片优先级**：首张背景图 `fetchpriority="high"` + `decoding="async"`
+- **Canvas 预合成**：下载页加载时一次性合成，预览=保存
+- **ComposePage 卸载 abort**：离开页面自动取消 AI 请求
+
+### 后端
+- **dl/:id 先响应后缓存**：`res.send(buffer)` 在 `writeFile` 之前，磁盘写入失败不影响客户端
+- **dl/:id 并发去重**：同一 photoId 多个请求只 fetch 一次 COS
+- **dl/:id 磁盘缓存非阻塞**：后台异步写入，失败只打日志
+- **dl/:id 内存缓存**：1小时 TTL，后续请求直接返回
+- **相框全部走 COS**：不走本地服务器 4Mbps 带宽
+- **校园Logo 走 COS**：不走 CF 隧道
+- **AI+COS 并行**：不互相依赖，同时执行
 
 ---
 
@@ -290,20 +325,36 @@ npm run build
 tar czf dist.tar.gz dist/
 git add -A && git commit -m "xxx" && git push origin main
 
-# 服务器 (81.70.134.240, ubuntu/Sm710317)
-cd /opt/ai-photo && sudo git pull origin main
-sudo rm -rf /opt/ai-photo/dist
-cd /opt/ai-photo && sudo tar xzf /tmp/dist.tar.gz
-sudo chown -R root:root /opt/ai-photo/dist
-sudo pm2 reload ai-photo
+# 自动部署（paramiko SSH）
+python -c "
+import paramiko
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.connect('81.70.134.240', username='ubuntu', password='Sm710317')
+for cmd in [
+    'cd /opt/ai-photo && sudo git pull origin main',
+    'cd /opt/ai-photo && sudo rm -rf dist && sudo tar xzf dist.tar.gz',
+    'cd /opt/ai-photo && sudo chown -R root:root dist',
+    'pm2 reload ai-photo --update-env',
+]:
+    ssh.exec_command(cmd)
+ssh.close()
+"
 ```
+
+### 服务器权限注意事项
+- PM2 以 `ubuntu` 用户运行
+- `uploads/` 和 `data.db` 必须属于 `ubuntu:ubuntu`
+- 部署时 `dist/` 用 `root:root`，其他目录不动
+- 如遇权限问题：`sudo chown -R ubuntu:ubuntu /opt/ai-photo/uploads /opt/ai-photo/data.db`
 
 ---
 
 ## 已知问题
 
-1. **旧照片迁移不完整** — 部分旧照片DB记录可能指向错误文件，`/dl/:id`有自动修复
-2. **服务器带宽4Mbps** — 相框显示走COS CDN，仅Canvas合成走本地
+1. **旧照片 COS URL** — 部分旧照片 DB 记录指向 COS URL，`/dl/:id` 首次访问需 fetch（已优化为先响应后缓存）
+2. **服务器带宽 4Mbps** — 所有静态资源走 COS CDN，不走本地服务器
+3. **Google Fonts 国内慢** — 已改为异步加载，不阻塞渲染
 
 ---
 
@@ -318,4 +369,3 @@ sudo pm2 reload ai-photo
 
 - `ui-ux-pro-max` — UI/UX 设计指南
 - `frontend-patterns` — React 前端模式
-- `superpowers` — Agent Team 开发流程
