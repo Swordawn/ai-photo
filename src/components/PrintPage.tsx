@@ -166,20 +166,26 @@ export default function PrintPage({
       if (!printWindow) { alert('请允许弹出窗口以打印照片'); URL.revokeObjectURL(dataUrl); return }
 
       printWindow.document.write(`<!DOCTYPE html><html><head><title>打印6寸照片</title><style>
-        @page { size: 6in 4in landscape; margin: 0; }
+        @page { size: 4in 6in; margin: 0; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: sans-serif; background: #f0f0f0; padding: 20px; text-align: center; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body { font-family: sans-serif; background: #f0f0f0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .tip { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .tip p { color: #856404; font-size: 14px; }
-        .photo { width: 6in; height: 4in; margin: 0 auto; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .photo { width: 4in; height: 6in; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         .photo img { width: 100%; height: 100%; object-fit: cover; }
         .btns { margin-top: 20px; }
         .btn { padding: 12px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 0 10px; }
         .btn-print { background: #1565C0; color: white; }
         .btn-close { background: #eee; color: #666; }
-        @media print { body { background: white; padding: 0; } .tip, .btns { display: none; } .photo { box-shadow: none; width: 100%; height: 100%; } }
+        @media print {
+          html, body { width: 4in; height: 6in; margin: 0; padding: 0; overflow: hidden; background: white; }
+          .tip, .btns { display: none !important; }
+          .photo { width: 4in; height: 6in; box-shadow: none; margin: 0; padding: 0; }
+          .photo img { width: 4in; height: 6in; object-fit: cover; display: block; }
+        }
       </style></head><body>
-        <div class="tip"><p>📋 打印设置：选择 <strong>4×6英寸</strong> 或 <strong>10×15cm</strong> 纸张，方向选<strong>横向</strong></p></div>
+        <div class="tip"><p>📋 打印设置：纸张选 <strong>4×6英寸</strong>（光面相纸），方向选<strong>纵向</strong></p></div>
         <div class="photo"><img src="${dataUrl}" /></div>
         <div class="btns">
           <button class="btn btn-print" onclick="window.print()">🖨️ 打印照片</button>
