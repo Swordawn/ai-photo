@@ -1246,7 +1246,8 @@ var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
 var COS_BASE='https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com';
-var frameSrc=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
+var frameCOSUrl=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
+var frameSrc='/api/proxy-image?url='+encodeURIComponent(frameCOSUrl);
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 log('page loaded, photoId='+photoId+', photoUrl='+(photoUrl?photoUrl.slice(0,60):'null')+', frame='+frameId);
 
@@ -1256,7 +1257,6 @@ var t=Date.now();
 log('loadImg['+label+'] start: '+src.slice(0,80));
 var timer=setTimeout(function(){log('loadImg['+label+'] TIMEOUT after '+(Date.now()-t)+'ms');reject(new Error('图片加载超时'))},timeout||15000);
 var img=new Image();
-img.crossOrigin='anonymous';
 img.onload=function(){clearTimeout(timer);log('loadImg['+label+'] ok in '+(Date.now()-t)+'ms, size='+img.naturalWidth+'x'+img.naturalHeight);resolve(img)};
 img.onerror=function(){clearTimeout(timer);log('loadImg['+label+'] ERROR after '+(Date.now()-t)+'ms');reject(new Error('图片加载失败'))};
 img.src=src;

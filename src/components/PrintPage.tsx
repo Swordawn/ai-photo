@@ -63,24 +63,37 @@ export default function PrintPage({
     return () => clearTimeout(timer)
   }, [countdown])
 
-  // 页面加载时通过代理预加载COS相框（blob URL，Canvas可用，不走服务器带宽）
+  // 预加载相框（本地路径直接加载，远程URL走代理）
   const preloadedFrameRef = useRef<HTMLImageElement | null>(null)
+  const framePreloadDoneRef = useRef<Promise<HTMLImageElement | null>>(Promise.resolve(null))
   const frameBlobUrlRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!frameSrc) { preloadedFrameRef.current = null; return }
+    if (!frameSrc) { preloadedFrameRef.current = null; framePreloadDoneRef.current = Promise.resolve(null); return }
     let cancelled = false
-    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(frameSrc)}`
-    apiFetch(proxyUrl)
-      .then(r => r.blob())
-      .then(blob => {
-        if (cancelled) return
-        const blobUrl = URL.createObjectURL(blob)
-        frameBlobUrlRef.current = blobUrl
-        const img = new Image()
-        img.onload = () => { if (!cancelled) preloadedFrameRef.current = img }
-        img.src = blobUrl
-      })
-      .catch(() => {})
+    const load = async (): Promise<HTMLImageElement | null> => {
+      try {
+        let src = frameSrc
+        // 远程URL走代理
+        if (frameSrc.startsWith('http')) {
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(frameSrc)}`
+          const resp = await apiFetch(proxyUrl)
+          const blob = await resp.blob()
+          if (cancelled) return null
+          src = URL.createObjectURL(blob)
+          frameBlobUrlRef.current = src
+        }
+        return await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image()
+          img.onload = () => { if (!cancelled) resolve(img); else reject(new Error('cancelled')) }
+          img.onerror = () => reject(new Error('相框加载失败'))
+          img.src = src
+        })
+      } catch (err) {
+        console.warn('[PrintPage] 相框预加载失败:', err)
+        return null
+      }
+    }
+    framePreloadDoneRef.current = load().then(img => { if (!cancelled) preloadedFrameRef.current = img; return img })
     return () => {
       cancelled = true
       if (frameBlobUrlRef.current) { URL.revokeObjectURL(frameBlobUrlRef.current); frameBlobUrlRef.current = null }
@@ -153,6 +166,7 @@ export default function PrintPage({
   const handlePrint = useCallback(async () => {
     try {
       const photo = await loadPhotoImage(cachedImage)
+      await framePreloadDoneRef.current
       const frame = preloadedFrameRef.current
       const blob = await compositeToBlob(photo, frame)
       const dataUrl = URL.createObjectURL(blob)
@@ -198,6 +212,7 @@ export default function PrintPage({
     setIsDownloading(true)
     try {
       const photo = await loadPhotoImage(cachedImage)
+      await framePreloadDoneRef.current
       const frame = preloadedFrameRef.current
       const blob = await compositeToBlob(photo, frame)
       downloadBlob(blob, `AI校园写真_${Date.now()}.jpg`)
