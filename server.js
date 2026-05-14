@@ -1245,9 +1245,7 @@ var photoUrl=params.get('url');
 var photoId=params.get('p');
 var frameId=params.get('frame')||'frame1';
 var frameMap={frame1:'xiangkuang1.png',frame2:'xiangkuang2.png',frame3:'xiangkuang3.png',frame4:'xiangkuang4.png',frame5:'xiangkuang5.png'};
-var COS_BASE='https://ai-photo-booth-1313122021.cos.ap-nanjing.myqcloud.com';
-var frameCOSUrl=COS_BASE+'/frames/'+(frameMap[frameId]||'xiangkuang1.png');
-var frameSrc='/api/proxy-image?url='+encodeURIComponent(frameCOSUrl);
+var frameSrc='/frames/'+(frameMap[frameId]||'xiangkuang1.png');
 var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 log('page loaded, photoId='+photoId+', photoUrl='+(photoUrl?photoUrl.slice(0,60):'null')+', frame='+frameId);
 
