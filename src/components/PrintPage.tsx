@@ -28,11 +28,6 @@ export default function PrintPage({
       setCachedImage(resultImage)
       return
     }
-    // COS URL 直接加载，不走代理
-    if (resultImage.includes('cos.ap-nanjing.myqcloud.com')) {
-      setCachedImage(resultImage)
-      return
-    }
     let revoked = false
     let blobUrl: string
     const preload = async () => {

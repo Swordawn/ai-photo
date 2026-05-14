@@ -30,7 +30,7 @@ if (COS_ENABLED) {
     Region: COS_REGION,
     CORSRules: [{
       AllowedOrigins: ['*'],
-      AllowedMethods: ['GET', 'HEAD'],
+      AllowedMethods: ['GET', 'HEAD', 'PUT'],
       AllowedHeaders: ['*'],
       MaxAgeSeconds: 86400,
     }],
