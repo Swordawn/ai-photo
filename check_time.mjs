@@ -1,0 +1,11 @@
+import Database from "better-sqlite3";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const db = new Database(join(__dirname, "data.db"));
+const rows = db.prepare("SELECT id, type, filename, created_at FROM photos ORDER BY id DESC LIMIT 5").all();
+for (const r of rows) console.log(r.id + " | " + r.type + " | " + r.created_at + " | " + r.filename.slice(0,60));
+console.log("---");
+console.log("SQLite now: " + db.prepare("SELECT datetime(\"now\") as t").get().t);
+console.log("SQLite localtime: " + db.prepare("SELECT datetime(\"now\",\"localtime\") as t").get().t);
+db.close();

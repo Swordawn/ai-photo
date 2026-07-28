@@ -1,0 +1,10 @@
+import Database from "better-sqlite3";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const db = new Database(join(__dirname, "data.db"));
+const now = db.prepare("SELECT datetime(\"now\",\"+8 hours\") as t").get();
+console.log("SQLite now+8h: " + now.t);
+const latest = db.prepare("SELECT id, created_at FROM photos ORDER BY id DESC LIMIT 3").all();
+for (const r of latest) console.log("ID " + r.id + ": " + r.created_at);
+db.close();
